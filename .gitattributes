@@ -1,0 +1,23 @@
+# Line endings: repository stores LF, Windows checkout converts to CRLF where safe.
+* text=auto
+
+*.py    text eol=lf
+*.md    text eol=lf
+*.txt   text eol=lf
+*.html  text eol=lf
+*.json  text eol=lf
+*.yml   text eol=lf
+*.yaml  text eol=lf
+
+# .bat files must keep CRLF (cmd parser is sensitive)
+*.bat   text eol=crlf
+
+# Binary
+*.png   binary
+*.jpg   binary
+*.jpeg  binary
+*.pdf   binary
+*.mp4   binary
+*.gguf  binary
+*.safetensors binary
+*.pickle binary

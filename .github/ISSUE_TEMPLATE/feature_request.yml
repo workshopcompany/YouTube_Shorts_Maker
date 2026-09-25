@@ -1,0 +1,31 @@
+name: 💡 기능 제안
+description: 아이디어·개선 요청
+title: "[feat] "
+labels: ["enhancement"]
+body:
+  - type: textarea
+    id: idea
+    attributes:
+      label: 어떤 기능이 필요한가요?
+      description: 상황과 함께 설명해 주세요 (예: 이미지 없이 대본만으로 영상 만들고 싶다)
+    validations:
+      required: true
+  - type: textarea
+    id: why
+    attributes:
+      label: 왜 필요한가요?
+      description: 지금 어떤 불편이 있는지
+  - type: dropdown
+    id: area
+    attributes:
+      label: 관련 영역
+      options:
+        - 설치 / 실행
+        - 대본 생성
+        - 이미지 (자동 생성 / 직접 업로드 / 삽입)
+        - 말풍선 / 자막
+        - 나레이션 (TTS)
+        - 영상 합성 (속도·자막)
+        - 유튜브 업로드
+        - 웹 편집기 UI
+        - 문서 / 기타

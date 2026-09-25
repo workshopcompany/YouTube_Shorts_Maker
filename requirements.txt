@@ -1,0 +1,15 @@
+google-generativeai>=0.3.0
+groq>=0.4.0
+openai>=1.0.0
+requests>=2.31.0
+Pillow>=10.0.0
+python-dotenv>=1.0.0
+moviepy>=1.0.3
+google-auth>=2.22.0
+google-auth-oauthlib>=1.0.0
+google-api-python-client>=2.95.0
+tqdm>=4.65.0
+colorama>=0.4.6
+edge-tts>=7.0.0
+gtts>=2.5.0
+pydub>=0.25.0

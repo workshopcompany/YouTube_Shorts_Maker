@@ -1,0 +1,1807 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>🎬 유튜브 쇼츠 웹 편집기</title>
+<style>
+  :root{
+    --bg:#0f1116; --panel:#171a21; --panel2:#1e222b; --line:#2a2f3a;
+    --txt:#e7e9ee; --muted:#9aa2b1; --accent:#4f8cff; --ok:#2fbf71; --warn:#e0a800; --err:#e5484d;
+  }
+  *{box-sizing:border-box}
+  body{margin:0;background:var(--bg);color:var(--txt);font:14px/1.5 "Malgun Gothic","Segoe UI",sans-serif}
+  header{display:flex;flex-wrap:wrap;gap:10px;align-items:center;padding:10px 16px;background:var(--panel);border-bottom:1px solid var(--line);position:sticky;top:0;z-index:10}
+  header h1{font-size:16px;margin:0 12px 0 0;font-weight:700}
+  .chip{background:var(--panel2);border:1px solid var(--line);border-radius:999px;padding:3px 10px;font-size:12px;color:var(--muted)}
+  .chip b{color:var(--txt)}
+  .spacer{flex:1}
+  button{background:var(--panel2);color:var(--txt);border:1px solid var(--line);border-radius:8px;padding:7px 12px;cursor:pointer;font-size:13px}
+  button:hover{border-color:var(--accent)}
+  button.primary{background:var(--accent);border-color:var(--accent);color:#fff;font-weight:700}
+  button.ghost{background:transparent}
+  button.danger{border-color:#5a2626;color:#ffb4b4}
+  button:disabled{opacity:.45;cursor:not-allowed}
+  .tabs{display:flex;gap:6px;padding:10px 16px 0}
+  .tab{padding:9px 16px;border:1px solid var(--line);border-bottom:none;border-radius:10px 10px 0 0;background:var(--panel2);color:var(--muted);cursor:pointer}
+  .tab.active{background:var(--panel);color:var(--txt);font-weight:700;border-color:var(--accent)}
+  main{padding:0 16px 40px}
+  .panel{background:var(--panel);border:1px solid var(--line);border-radius:0 10px 10px 10px;padding:14px}
+  .row{display:flex;gap:14px;flex-wrap:wrap}
+  .col{display:flex;flex-direction:column;gap:10px}
+  .grow{flex:1;min-width:300px}
+  label{font-size:12px;color:var(--muted);display:block;margin-bottom:4px}
+  input,textarea,select{width:100%;background:#11141a;color:var(--txt);border:1px solid var(--line);border-radius:8px;padding:8px;font:13px/1.5 "Malgun Gothic",sans-serif}
+  textarea{resize:vertical}
+  .scene-card{background:var(--panel2);border:1px solid var(--line);border-radius:10px;padding:10px;margin-bottom:10px}
+  .scene-head{display:flex;align-items:center;gap:8px;margin-bottom:8px;flex-wrap:wrap}
+  .scene-head .no{font-weight:700;color:var(--accent)}
+  .scene-head input{width:110px}
+  .grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(118px,1fr));gap:8px;max-height:430px;overflow:auto}
+  .thumb{border:2px solid var(--line);border-radius:8px;overflow:hidden;cursor:pointer;background:#0b0d11}
+  .thumb.sel{border-color:var(--accent)}
+  .thumb img{width:100%;display:block;aspect-ratio:9/16;object-fit:cover}
+  .thumb .cap{font-size:11px;padding:2px 4px;color:var(--muted);display:flex;justify-content:space-between;gap:4px}
+  .badge{font-size:10px;padding:1px 5px;border-radius:6px;border:1px solid var(--line);color:var(--muted);white-space:nowrap}
+  .badge.regen{color:#ffd479;border-color:#5a4a17}
+  .badge.overlay{color:#8fd0ff;border-color:#1f4055}
+  .badge.ok{color:#8ee6b4;border-color:#1f5a3a}
+  .badge.no{color:#ffb4b4;border-color:#5a2626}
+  .preview-box{background:#0b0d11;border:1px solid var(--line);border-radius:10px;padding:8px;display:flex;justify-content:center}
+  .preview-box img{max-height:58vh;border-radius:6px}
+  .hint{font-size:12px;color:var(--muted)}
+  pre.log{background:#0b0d11;border:1px solid var(--line);border-radius:10px;padding:10px;height:300px;overflow:auto;white-space:pre-wrap;font:12px/1.45 Consolas,monospace;color:#cfd6e4}
+  .slider{display:flex;align-items:center;gap:8px}
+  .slider input[type=range]{flex:1}
+  .slider span{width:44px;text-align:right;color:var(--muted);font-size:12px}
+  #toast{position:fixed;right:16px;bottom:16px;display:flex;flex-direction:column;gap:8px;z-index:50}
+  .toast{background:#20242e;border:1px solid var(--line);border-left:4px solid var(--accent);border-radius:8px;padding:10px 14px;max-width:420px;box-shadow:0 6px 20px rgba(0,0,0,.4)}
+  .toast.ok{border-left-color:var(--ok)} .toast.err{border-left-color:var(--err)} .toast.warn{border-left-color:var(--warn)}
+  .hidden{display:none}
+  .audio-row{display:flex;align-items:center;gap:8px}
+  audio{height:32px}
+  details summary{cursor:pointer;color:var(--muted)}
+</style>
+</head>
+<body>
+<header>
+  <h1>🎬 쇼츠 웹 편집기</h1>
+  <span class="chip">장면 <b id="chip-count">-</b></span>
+  <span class="chip">체크포인트 <b id="chip-ck">-</b></span>
+  <span class="chip" id="chip-sync">script.txt -</span>
+  <span class="chip" id="chip-job">대기</span>
+  <span class="spacer"></span>
+  <button class="ghost" onclick="loadState(true)">🔄 새로고침</button>
+  <button class="ghost" onclick="saveStateFile()" title="체크포인트 + 제목·설명까지 함께 저장">💾 상태 저장</button>
+  <button class="primary" onclick="saveScript()">💾 대본 저장</button>
+</header>
+
+<div class="tabs">
+  <div class="tab active" data-tab="script" onclick="showTab('script')">① 대본</div>
+  <div class="tab" data-tab="overlay" onclick="showTab('overlay')">② 이미지 · 텍스트 붙여넣기</div>
+  <div class="tab" data-tab="build" onclick="showTab('build')">③ 제작 · 로그</div>
+  <div class="tab" data-tab="video" onclick="showTab('video')">④ 영상 · 업로드</div>
+</div>
+
+<main>
+  <!-- ================= ① 대본 ================= -->
+  <section id="tab-script" class="panel">
+    <!-- 아이디어 입력 및 AI 대본 생성 메인 카드 -->
+    <div style="margin-bottom:14px;background:#f0fdf4;border:2px solid #86efac;border-radius:12px;padding:14px 16px;box-shadow:0 1px 3px rgba(0,0,0,0.05)">
+      <div style="display:flex;align-items:center;gap:8px;margin-bottom:8px">
+        <span style="font-size:18px">🎯</span>
+        <b style="font-size:15px;color:#166534">1단계: 영상 아이디어 입력 (제목 · 설명 · 대본 · 시각 묘사 자동 생성)</b>
+      </div>
+      <div class="col" style="gap:8px">
+        <div class="row" style="gap:8px">
+          <input id="gen-idea" style="font-size:14px;padding:8px 12px;border:1.5px solid #22c55e;border-radius:8px;flex:1"
+                 placeholder="어떤 쇼츠 영상을 만들까요? 예: 무료 AI로 코딩 배우기, 파이썬 업무 자동화 꿀팁, 라쿤의 일상">
+          <button class="primary" id="btn-gen-script" onclick="genScript()" style="font-size:14px;font-weight:700;padding:8px 18px;white-space:nowrap">
+            🤖 AI 대본 만들기
+          </button>
+        </div>
+        <div class="row" style="align-items:center;gap:12px;font-size:13px;flex-wrap:wrap">
+          <div style="display:flex;align-items:center;gap:6px">
+            <label style="margin:0;font-weight:600">텍스트 API:</label>
+            <select id="gen-api" onchange="onGenApiChange()" style="padding:4px 8px">
+              <option value="gemini" selected>Gemini (기본)</option>
+              <option value="openrouter">OpenRouter</option>
+              <option value="groq">Groq (모델 목록에서 선택)</option>
+            </select>
+          </div>
+          <div id="gen-groq-wrap" style="display:none;align-items:center;gap:6px">
+            <select id="gen-groq-model" style="padding:4px 8px"><option value="">(기본 모델)</option></select>
+            <button class="ghost" onclick="loadGroqModels()" style="padding:4px 8px">🔄</button>
+          </div>
+          <div style="display:flex;align-items:center;gap:6px">
+            <label style="margin:0;font-weight:600">주인공 캐릭터:</label>
+            <input id="gen-char" style="width:110px;padding:4px 8px" placeholder="기본: 너구리">
+          </div>
+          <label style="display:flex;align-items:center;gap:5px;margin:0;cursor:pointer">
+            <input type="checkbox" id="gen-titles" checked>
+            <span>제목·설명도 함께 생성</span>
+          </label>
+          <button class="ghost" onclick="genFill()" style="padding:4px 10px;font-size:12px" title="비어있는 대사/시각 묘사만 AI로 자동 채우기">
+            🧹 빈 문구 채우기
+          </button>
+        </div>
+        <!-- 대본 생성 진행 상태 알림창 -->
+        <div id="gen-status-box" style="display:none;background:#fefce8;border:1px solid #fde047;border-radius:8px;padding:8px 12px;font-size:13px;color:#854d0e;align-items:center;gap:8px">
+          <span class="spinner" style="display:inline-block;animation:spin 1s linear infinite">⏳</span>
+          <span id="gen-status-text">AI가 제목, 설명, 대본(대사 + 시각 묘사)을 작성하고 있습니다... (약 10~30초 소요)</span>
+        </div>
+        <!-- 현재 생성된 제목/설명 확인란 -->
+        <div id="gen-result-summary" style="display:none;background:#ffffff;border:1px solid #bbf7d0;border-radius:8px;padding:8px 12px;font-size:13px">
+          <div style="display:flex;gap:6px;align-items:center;margin-bottom:4px">
+            <b style="color:#15803d">📌 현재 제목:</b>
+            <span id="current-title-badge" style="font-weight:600"></span>
+          </div>
+          <div style="display:flex;gap:6px">
+            <b style="color:#15803d;white-space:nowrap">📝 설명:</b>
+            <span id="current-desc-badge" style="color:#4b5563;text-overflow:ellipsis;overflow:hidden;white-space:nowrap"></span>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <div class="row" style="margin-bottom:10px;align-items:center">
+      <button onclick="addScene()">➕ 장면 추가</button>
+      <button onclick="resequenceTime()">⏱ 시간 자동 정리 (5초 간격)</button>
+      <button class="ghost" onclick="toggleRaw()">📄 script.txt 원본 보기</button>
+      <div class="spacer"></div>
+      <span class="hint">대본(대사)이나 시각 묘사를 직접 수정한 후 <b>대본 저장</b>을 누르면 즉시 반영됩니다.</span>
+      <button class="primary" onclick="saveScript()">💾 대본 저장</button>
+    </div>
+    <div id="raw-box" class="hidden col" style="margin-bottom:10px">
+      <label>script.txt 원본 텍스트 (붙여넣기 후 “원본 저장”)</label>
+      <textarea id="raw-text" rows="12"></textarea>
+      <div class="row">
+        <button class="primary" onclick="saveRaw()">📥 원본 저장</button>
+        <button class="ghost" onclick="document.getElementById('raw-text').value=stateToRawText()">현재 대본 불러오기</button>
+      </div>
+    </div>
+    <div id="scene-list"></div>
+  </section>
+
+  <!-- ================= ② 이미지 · 텍스트 ================= -->
+  <section id="tab-overlay" class="panel hidden">
+    <div class="row">
+      <div class="col grow" style="min-width:300px">
+        <div class="row" style="align-items:center;gap:8px">
+          <b>장면 이미지</b>
+          <span class="hint">클릭 → 오른쪽에서 대사를 붙여넣고 미리보기</span>
+        </div>
+        <div class="grid" id="thumb-grid"></div>
+        <div class="audio-row" style="margin-top:6px">
+          <span class="hint">🎧 선택 장면 음성</span>
+          <audio id="scene-audio" controls></audio>
+          <button onclick="regenSceneAudio()">🎤 이 장면 음성 다시 만들기</button>
+          <button class="ghost" onclick="regenChangedAudio()">🔄 변경분 음성 전부</button>
+          <button class="ghost" onclick="regenAllAudio()">🔊 전체 음성 다시 만들기</button>
+        </div>
+      </div>
+
+      <div class="col" style="flex:0 0 430px;min-width:340px">
+        <div class="preview-box" style="position:relative" id="preview-wrap">
+          <img id="preview-img" alt="미리보기" style="user-select:none" draggable="false">
+          <div id="ins-guide" style="position:absolute;border:2px dashed #ffcc00;display:none;
+               pointer-events:none;box-shadow:0 0 0 9999px rgba(0,0,0,0)"></div>
+        </div>
+        <div>
+          <label>✏️ 장면 <span id="sel-no">-</span> 대사 — 이미지에 붙여넣을 내용 (Ctrl+V)</label>
+          <textarea id="sel-content" rows="3" oninput="onSelContentInput()"
+                    placeholder="여기에 대사를 붙여넣으세요"></textarea>
+          <div class="row" style="margin-top:6px">
+            <button onclick="previewSelected()">👁 미리보기 (저장 안 함)</button>
+            <button class="primary" onclick="drawSelected()">🖌 이 장면에 대사만 그리기 (AI 아님)</button>
+          </div>
+          <div id="torch-warn" style="display:none;margin-top:8px;padding:8px;background:#fef3c7;border:1px solid #f59e0b;border-radius:6px;font-size:12px;color:#92400e">
+            ⚠️ 이 웹 편집기는 <b>torch 없는 파이썬</b>으로 실행 중이라 <b>로컬 SD 이미지 생성이 불가</b>합니다.<br>
+            창을 닫고 <b>start_web.bat</b> 으로 다시 실행하세요. (이미지 모델을 <b>Gemini</b>로 바꾸면 생성 가능)
+          </div>
+          <div style="margin-top:8px;padding:8px;background:var(--panel2);border:1px solid var(--line);border-radius:8px">
+            <label style="font-weight:700;font-size:12px;color:var(--txt);margin-bottom:4px;display:block">🎨 이 장면 이미지 — AI 모델로 생성 / 대사·묘사 재작성</label>
+            <div class="row" style="gap:6px">
+              <select id="scene-image-mode" style="flex:1;font-size:12px;padding:4px 8px">
+                <option value="sd_gguf">1. 로컬 SD 3.5 Large Turbo (Q4 GGUF · 무료)</option>
+                <option value="sd_sdxl">2. 로컬 SDXL-Turbo (폴더 · 무료)</option>
+                <option value="gemini">3. Gemini 이미지 API</option>
+              </select>
+              <button class="primary" onclick="regenSceneImage(this)" style="white-space:nowrap;font-size:12px">🎨 이 장면 새 이미지 만들기 (AI)</button>
+            </div>
+            <div class="row" style="margin-top:6px">
+              <button onclick="regenSceneText()" style="flex:1;font-size:12px">🤖 이 장면 대사·묘사 다시 작성 (텍스트 AI)</button>
+            </div>
+            <div class="row" style="margin-top:6px">
+              <button onclick="regenAllImages(this)" style="flex:1;font-size:12px">🎨 모든 장면 이미지 다시 만들기 (AI) — 시간 오래 걸림</button>
+            </div>
+          </div>
+          <span class="hint">
+            <b>🎨 이미지 AI 생성</b> = 선택한 모델(SD/Gemini)이 시각 묘사로 그림을 새로 만듦 ·
+            <b>🤖 텍스트 AI</b> = 제미나이가 대사·묘사 글만 다시 씀 ·
+            <b>🖌 AI 아님</b> = 원본 그림은 그대로 두고 글씨만 다시 그림
+          </span>
+        </div>
+
+        <details open>
+          <summary>🎨 텍스트 스타일 설정</summary>
+          <div class="col" style="margin-top:8px">
+            <div class="row">
+              <div class="grow"><label>스타일</label><select id="cfg-style" onchange="onCfgChange()"></select></div>
+              <div class="grow"><label>위치</label><select id="cfg-position" onchange="onCfgChange()"></select></div>
+            </div>
+            <div><label>글자 크기</label>
+              <div class="slider"><input id="cfg-font" type="range" min="24" max="96" step="2" oninput="onCfgChange()">
+              <span id="cfg-font-v"></span></div>
+            </div>
+            <div><label>박스 투명도 (255=불투명)</label>
+              <div class="slider"><input id="cfg-alpha" type="range" min="0" max="255" step="5" oninput="onCfgChange()">
+              <span id="cfg-alpha-v"></span></div>
+            </div>
+            <div class="row">
+              <div class="grow"><label>글자색</label><input id="cfg-text" type="color" onchange="onCfgChange()"></div>
+              <div class="grow"><label>박스색</label><input id="cfg-box" type="color" onchange="onCfgChange()"></div>
+            </div>
+            <div><label>최대 줄 수</label>
+              <div class="slider"><input id="cfg-lines" type="range" min="1" max="8" step="1" oninput="onCfgChange()">
+              <span id="cfg-lines-v"></span></div>
+            </div>
+            <div class="row">
+              <button onclick="saveCfg('none')">💾 설정만 저장</button>
+              <button onclick="saveCfg('all')">🖌 모든 장면 대사 다시 그리기 (AI 아님)</button>
+            </div>
+            <div class="row">
+              <button class="ghost" onclick="saveCfg('auto')">♻ 바뀐 장면만 대사 다시 그리기 (AI 아님)</button>
+            </div>
+            <div>
+              <label>🖼 다른 이미지 올리기 → 선택 장면의 원본(base)으로 등록</label>
+              <input type="file" id="upload-file" accept="image/*" onchange="uploadImage(this)">
+            </div>
+          </div>
+        </details>
+
+        <details>
+          <summary>🖼 이미지 삽입 (기존 이미지에 박아 넣기)</summary>
+          <div class="col" style="margin-top:8px">
+            <div id="ins-warn" style="display:none;background:#fef3c7;border:1px solid #f59e0b;color:#92400e;padding:8px 10px;border-radius:8px;font-size:13px;line-height:1.5"></div>
+            <div class="row">
+              <div class="grow">
+                <label>📁 삽입할 이미지 (캡처/첨부파일)</label>
+                <input type="file" id="insert-file" accept="image/*" onchange="uploadInsert(this)">
+              </div>
+            </div>
+            <div class="row">
+              <div class="grow"><label>프레임 모양</label>
+                <select id="ins-frame" onchange="onInsChange()">
+                  <option value="rect">일반 사각형</option>
+                  <option value="rounded">모서리 둥근 사각형</option>
+                  <option value="tv">TV 화면</option>
+                  <option value="frame">액자</option>
+                </select>
+              </div>
+              <div class="grow"><label>비율 유지</label>
+                <select id="ins-ratio" onchange="onInsChange()">
+                  <option value="1">유지 (권장)</option>
+                  <option value="0">자유 (영역에 꽉 채움)</option>
+                </select>
+              </div>
+              <div class="grow" style="display:flex;align-items:center;gap:6px;margin-top:20px">
+                <input type="checkbox" id="ins-enable" checked onchange="setInsEnabled(this.checked)">
+                <label for="ins-enable" style="margin:0">삽입 활성화</label>
+              </div>
+            </div>
+            <div><label>가로 위치 <span id="ins-x-v"></span></label>
+              <div class="slider"><input id="ins-x" type="range" min="0" max="100" step="1" oninput="onInsChange()">
+              </div>
+            </div>
+            <div><label>세로 위치 <span id="ins-y-v"></span></label>
+              <div class="slider"><input id="ins-y" type="range" min="0" max="100" step="1" oninput="onInsChange()">
+              </div>
+            </div>
+            <div><label>크기(폭) <span id="ins-w-v"></span></label>
+              <div class="slider"><input id="ins-w" type="range" min="5" max="100" step="1" oninput="onInsChange()">
+              </div>
+            </div>
+            <div><label>최대 높이 <span id="ins-h-v"></span></label>
+              <div class="slider"><input id="ins-h" type="range" min="5" max="100" step="1" oninput="onInsChange()">
+              </div>
+            </div>
+            <div><label>테두리 두께 <span id="ins-b-v"></span></label>
+              <div class="slider"><input id="ins-b" type="range" min="0" max="30" step="1" oninput="onInsChange()">
+              </div>
+            </div>
+            <div class="row">
+              <div class="grow"><label>테두리 색</label><input id="ins-border" type="color" onchange="onInsChange()"></div>
+              <div class="grow"><label>액자색</label><input id="ins-framec" type="color" onchange="onInsChange()"></div>
+            </div>
+            <div class="row">
+              <div class="grow"><label>TV 베젤색</label><input id="ins-tvc" type="color" onchange="onInsChange()"></div>
+              <div class="grow"><label>그림자</label>
+                <select id="ins-shadow" onchange="onInsChange()">
+                  <option value="1">있음</option><option value="0">없음</option>
+                </select>
+              </div>
+            </div>
+            <div class="row" style="margin-top:6px">
+              <button class="primary" onclick="applyInsert()">🖌 이 장면에 삽입</button>
+              <button onclick="saveInsertCfg()">💾 저장 + 즉시 반영</button>
+              <button class="danger" onclick="removeInsert()">🗑 삽입 제거</button>
+            </div>
+            <span class="hint">💡 삽입 이미지는 <b>교체가 아니라 위에 겹쳐 넣기</b>입니다. 위치·크기는 미리보기에서 바로 확인되고, 원본 이미지는 그대로 보존됩니다.<br>
+            🖱 <b>미리보기의 노란 점선 박스를 드래그</b>하면 위치가 이동하고, <b>오른쪽 아래 모서리를 끌면 크기</b>가 조절됩니다. (놓으면 실시간 미리보기 갱신)</span>
+          </div>
+        </details>
+      </div>
+    </div>
+  </section>
+
+  <!-- ================= ③ 제작 · 로그 ================= -->
+  <section id="tab-build" class="panel hidden">
+    <div class="row">
+      <div class="col grow">
+        <b>무엇을 다시 만들까요?</b>
+        <div><label>1) 이미지 생성 방식</label><select id="image-mode"></select></div>
+        <div><label>2) 이미지 다시 만들기 (시각 묘사가 바뀐 장면)</label>
+          <select id="scope-images">
+            <option value="auto">변경/누락된 장면만 (추천)</option>
+            <option value="all">전체 장면</option>
+            <option value="none">건너뛰기 (기존 이미지 유지)</option>
+            <option value="pick">아래 번호로 직접 선택</option>
+          </select>
+        </div>
+        <div><label>3) 텍스트(대사) 다시 그리기 — API 호출 없음</label>
+          <select id="scope-overlay">
+            <option value="auto">변경된 장면만 (추천)</option>
+            <option value="all">전체 장면</option>
+            <option value="none">건너뛰기</option>
+            <option value="pick">아래 번호로 직접 선택</option>
+          </select>
+        </div>
+        <div><label>4) 음성 다시 만들기 (edge-tts 무료)</label>
+          <select id="scope-tts">
+            <option value="auto">변경된 장면만 (추천)</option>
+            <option value="all">전체 장면</option>
+            <option value="none">건너뛰기</option>
+            <option value="pick">아래 번호로 직접 선택</option>
+          </select>
+        </div>
+        <div class="row">
+          <div class="grow"><label>직접 선택할 장면 번호 (예: 3,5,7)</label><input id="pick-scenes" placeholder="3,5,7"></div>
+          <div class="grow"><label>5) 영상 만들기</label>
+            <select id="do-video"><option value="1">예</option><option value="0">아니오</option></select>
+          </div>
+          <div class="grow"><label>재생 배속</label><input id="speed" type="number" step="0.05" min="0.5" max="3.0"></div>
+        </div>
+        <div class="row" style="margin-top:8px">
+          <button class="primary" onclick="startBuild()">🚀 제작 시작</button>
+          <button class="danger" onclick="stopBuild()">⏹ 작업 중지</button>
+        </div>
+        <span class="hint">‘변경만’을 고르면 script.txt에서 수정한 장면만 다시 만듭니다. 대사만 바꾼 장면은 이미지를 새로 생성하지 않고 텍스트만 다시 그립니다.</span>
+      </div>
+
+      <div class="col grow">
+        <b>제목 / 설명</b>
+        <div><label>제목 (첫 줄을 영상 파일명으로 사용)</label><input id="title-input"></div>
+        <div><label>설명</label><textarea id="desc-input" rows="6"></textarea></div>
+        <button onclick="saveTitles()">💾 제목/설명 저장</button>
+        <b style="margin-top:8px">작업 계획 (변경 감지)</b>
+        <pre class="log" id="plan-box" style="height:170px"></pre>
+        <div class="row">
+          <button class="ghost" onclick="syncNow()">🔁 script.txt → 체크포인트 동기화</button>
+        </div>
+      </div>
+    </div>
+
+    <div class="col" style="margin-top:14px">
+      <div class="row" style="align-items:center;gap:10px">
+        <b>진행 로그</b><span class="hint" id="job-status"></span>
+      </div>
+      <pre class="log" id="job-log"></pre>
+    </div>
+  </section>
+
+  <section id="tab-video" class="panel hidden">
+    <div class="row">
+      <div class="col grow">
+        <b>🎬 영상 만들기 (이미지 + 음성 + 자막 → MP4)</b>
+        <div class="row">
+          <div class="grow"><label>재생 배속</label><input id="v-speed" type="number" step="0.05" min="0.5" max="3.0"></div>
+          <div class="grow"><label>영상 만들기 전 변경분 반영</label>
+            <select id="v-sync">
+              <option value="1" selected>변경분 자동 반영 (권장) — 바뀐 텍스트·음성을 먼저 적용</option>
+              <option value="0">안 함 — 기존 이미지/음성으로 바로 합성 (⚠ 변경분 미반영)</option>
+            </select>
+          </div>
+        </div>
+        <div class="row" style="margin-top:8px">
+          <button class="primary" onclick="buildVideoNow()">🎬 영상 생성</button>
+        </div>
+        <span class="hint">제목 첫 줄이 영상 파일명으로 사용됩니다. 제목·설명은 오른쪽에서 수정할 수 있습니다.
+        수정한 제목·설명은 우측 <b>💾 제목/설명 저장</b>, 상단 <b>💾 상태 저장</b>, 또는 영상 생성·업로드 실행 시 자동으로 반영됩니다.</span>
+
+        <b style="margin-top:14px">📤 유튜브 업로드</b>
+        <div><label>영상 제목</label><select id="v-title"></select></div>
+        <div><label>공개 설정</label>
+          <select id="v-privacy">
+            <option value="private">비공개 — 업로드 후 스튜디오에서 확인 (추천)</option>
+            <option value="public">공개</option>
+            <option value="unlisted">링크 공개</option>
+          </select>
+        </div>
+        <div class="row" style="margin-top:8px">
+          <button onclick="uploadVideoNow(false)">📤 기존 영상 업로드</button>
+          <button class="primary" onclick="uploadVideoNow(true)">🎬+📤 영상 생성 후 업로드</button>
+          <button class="danger" onclick="stopBuild()">⏹ 작업 중지</button>
+        </div>
+        <span class="hint">최초 1회만 구글 브라우저 로그인이 필요합니다 (client_secrets.json → token.pickle 자동 저장).
+업로드 완료 후 로그의 URL을 열어 스튜디오에서 최종 확인하세요.</span>
+      </div>
+
+      <div class="col grow">
+        <b>제목 / 설명</b>
+        <div><label>제목 (첫 줄 = 영상 파일명)</label><input id="v-title-input"></div>
+        <div><label>설명</label><textarea id="v-desc-input" rows="6"></textarea></div>
+        <button onclick="saveTitles2()">💾 제목/설명 저장</button>
+        <b style="margin-top:8px">작업 계획</b>
+        <pre class="log" id="v-plan-box" style="height:170px"></pre>
+      </div>
+    </div>
+
+    <div class="col" style="margin-top:14px">
+      <div class="row" style="align-items:center;gap:10px">
+        <b>진행 로그</b><span class="hint" id="job-status-2"></span>
+      </div>
+      <pre class="log" id="job-log-2"></pre>
+    </div>
+  </section>
+</main>
+<div id="toast"></div>
+
+<script>
+/* ============================================================
+   상태
+   ============================================================ */
+const S = { scenes: [], data: null, selected: 1, jobRunning: false, dirty: false };
+
+/* ---------- 공용 헬퍼 ---------- */
+async function api(path, body) {
+  const res = await fetch(path, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(body || {})
+  });
+  try { return await res.json(); } catch (e) { return { ok: false, error: '응답 해석 실패' }; }
+}
+function esc(s) {
+  return String(s == null ? '' : s).replace(/&/g, '&amp;').replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;').replace(/"/g, '&quot;');
+}
+function toast(msg, kind) {
+  const box = document.getElementById('toast');
+  const el = document.createElement('div');
+  el.className = 'toast ' + (kind || '');
+  el.innerHTML = esc(msg).replace(/\n/g, '<br>');
+  box.appendChild(el);
+  setTimeout(() => { el.style.opacity = '0'; el.style.transition = 'opacity .4s'; }, 4200);
+  setTimeout(() => el.remove(), 4700);
+}
+function numList(text) { return (String(text || '').match(/\d+/g) || []).map(Number); }
+function scopeValue(id) { return document.getElementById(id).value; }
+
+function renderIdeaSummary() {
+  const d = S.data || {};
+  const t = (d.titles && d.titles[0]) ? d.titles[0] : '';
+  const desc = d.description || '';
+  const box = document.getElementById('gen-result-summary');
+  const tBadge = document.getElementById('current-title-badge');
+  const dBadge = document.getElementById('current-desc-badge');
+  if (box && tBadge && dBadge) {
+    if (t || desc) {
+      box.style.display = 'block';
+      tBadge.textContent = t || '(제목 없음)';
+      dBadge.textContent = desc ? desc.replace(/\n/g, ' ') : '(설명 없음)';
+    } else {
+      box.style.display = 'none';
+    }
+  }
+}
+
+/* ---------- 서버 상태 로딩 ---------- */
+async function loadState(forcePreview) {
+  const res = await fetch('/api/state' + (forcePreview ? '?force=1' : ''));
+  const data = await res.json();
+  if (!data.ok) { toast('상태 로딩 실패: ' + (data.error || ''), 'err'); return; }
+  S.data = data;
+  const _tw = document.getElementById('torch-warn');
+  if (_tw) _tw.style.display = (data.torch_available === false) ? 'block' : 'none';
+  S.scenes = (data.scenes || []).map(r => ({ time: r.time, content: r.content, visual: r.visual }));
+  if (!S.scenes.length) toast('script.txt 가 비어 있습니다. 대본 탭에서 장면을 추가하세요.', 'warn');
+  if (S.selected > S.scenes.length) S.selected = Math.max(1, S.scenes.length);
+  renderChips();
+  renderScenes();
+  renderThumbs();
+  renderOverlayPanel();
+  renderBuildPanel();
+  renderVideoPanel();
+  renderIdeaSummary();
+  // 선택 장면 미리보기/음성도 최신 상태로 갱신
+  // (이게 없으면 삽입·그리기 후에도 화면의 미리보기가 옛 이미지 그대로 남아 보임)
+  if (S.selected && S.scenes.length) selectScene(S.selected);
+}
+
+/* 현재 제목/설명 입력값 결정 — ③·④ 탭 두 쌽 중:
+   1) 포커스 중인 입력  2) 서버 저장값과 다른(수정된) 쪽  3) 활성 탭 순 */
+function currentTitleDesc() {
+  const d = S.data || {};
+  const savedT = ((d.titles || [])[0] || '').trim();
+  const savedD = (d.description || '');
+  const pairs = [
+    { t: document.getElementById('title-input'), d: document.getElementById('desc-input') },
+    { t: document.getElementById('v-title-input'), d: document.getElementById('v-desc-input') }
+  ].filter(p => p.t && p.d);
+  const text = p => ({ title: (p.t.value || '').trim(), desc: p.d.value || '' });
+  const ae = document.activeElement;
+  let p = pairs.find(x => x.t === ae || x.d === ae);
+  if (!p) {
+    const changed = pairs.filter(x => { const v = text(x); return v.title !== savedT || v.desc !== savedD; });
+    if (changed.length === 1) p = changed[0];
+  }
+  if (!p) {
+    const vt = document.getElementById('tab-video');
+    p = (vt && !vt.classList.contains('hidden')) ? (pairs[1] || pairs[0]) : pairs[0];
+  }
+  if (!p) return { titles: [], description: '' };
+  const v = text(p);
+  return { titles: v.title ? [v.title] : [], description: v.desc };
+}
+
+async function saveStateFile() {
+  // 제목·설명 입력도 함께 저장 — 수정 후 "상태 저장"만으로 titles.txt/description.txt 반영
+  // (S.data 미로드 전에는 빈 값으로 기존 제목/설명이 덮어씌워지지 않도록 전송 생략)
+  const body = {};
+  if (S.data) {
+    const td = currentTitleDesc();
+    if (td.titles.length) body.titles = td.titles;
+    body.description = td.description;
+  }
+  const res = await api('/api/save_state', body);
+  if (!res.ok) { toast('상태 저장 실패: ' + (res.error || ''), 'err'); return; }
+  toast('💾 ' + (res.message || '현재 상태를 체크포인트에 저장했습니다.'), 'ok');
+  await loadState(false);
+}
+
+function renderChips() {
+  const d = S.data || {};
+  document.getElementById('chip-count').textContent = (d.count || 0) + '개';
+  document.getElementById('chip-ck').textContent =
+    (d.checkpoint && d.checkpoint.exists) ? ('단계 ' + d.checkpoint.step) : '없음';
+  const summary = d.plan && d.plan.summary ? d.plan.summary.split('\n')[0] : '';
+  const el = document.getElementById('chip-sync');
+  el.innerHTML = 'script.txt <b>' + esc(summary) + '</b>';
+}
+
+/* ---------- 탭 전환 ---------- */
+function showTab(name) {
+  document.querySelectorAll('.tab').forEach(t => t.classList.toggle('active', t.dataset.tab === name));
+  ['script', 'overlay', 'build', 'video'].forEach(n => {
+    document.getElementById('tab-' + n).classList.toggle('hidden', n !== name);
+  });
+}
+
+/* ============================================================
+   ① 대본 탭
+   ============================================================ */
+/* Groq 모델 목록 실시간 조회 (main.py 의 모델 선택 이식) */
+function onGenApiChange() {
+  const isGroq = document.getElementById('gen-api').value === 'groq';
+  document.getElementById('gen-groq-wrap').style.display = isGroq ? 'block' : 'none';
+  if (isGroq) loadGroqModels();
+}
+async function loadGroqModels() {
+  const sel = document.getElementById('gen-groq-model');
+  if (!sel) return;
+  sel.innerHTML = '<option value="">(불러오는 중...)</option>';
+  try {
+    const res = await (await fetch('/api/groq_models')).json();
+    const ms = res.models || [];
+    sel.innerHTML = ms.length
+      ? ms.map(m => '<option value="' + esc(m) + '">' + esc(m) + '</option>').join('')
+      : '<option value="">(목록 없음 — 기본 모델 사용)</option>';
+  } catch (e) {
+    sel.innerHTML = '<option value="">(조회 실패 — 기본 모델 사용)</option>';
+  }
+}
+function genGroqModel() {
+  const v = document.getElementById('gen-groq-model');
+  return (v && v.value) ? v.value : undefined;
+}
+
+/* AI로 제목·설명·대본 새로 생성 (main.py 단계 1의 웹 이식) */
+async function genScript() {
+  if (S.jobRunning) { toast('이미 작업이 실행 중입니다.', 'warn'); return; }
+  const idea = document.getElementById('gen-idea').value.trim();
+  if (!idea) { toast('영상 아이디어를 입력하세요.', 'warn'); return; }
+  const msg = S.scenes.length
+    ? ('현재 대본(' + S.scenes.length + '장면)을 새로 생성한 대본으로 덮어씁니다.\n계속할까요?')
+    : '새 대본을 생성합니다. 계속할까요?';
+  if (!confirm(msg)) return;
+  const spec = {
+    steps: ['text'],
+    idea: idea,
+    api: document.getElementById('gen-api').value,
+    groq_model: genGroqModel(),
+    character: document.getElementById('gen-char').value.trim(),
+    title_mode: document.getElementById('gen-titles').checked
+  };
+
+  const stBox = document.getElementById('gen-status-box');
+  const btnGen = document.getElementById('btn-gen-script');
+  if (stBox) stBox.style.display = 'flex';
+  if (btnGen) { btnGen.disabled = true; btnGen.textContent = '⏳ 생성 중...'; }
+
+  const res = await api('/api/run', { spec: spec, label: 'AI 대본 생성 (' + idea.slice(0, 15) + '...)' });
+  if (!res.ok) {
+    if (stBox) stBox.style.display = 'none';
+    if (btnGen) { btnGen.disabled = false; btnGen.textContent = '🤖 AI 대본 만들기'; }
+    toast('시작 실패: ' + (res.error || ''), 'err');
+    return;
+  }
+  S.jobRunning = true;
+  S.jobOwner = 'script';
+  toast('🤖 AI가 제목, 설명, 대본을 작성하고 있습니다. 잠시만 기다려주세요...', 'ok');
+  // 화면을 튕기지 않고 대본 탭에서 그대로 진행 상태 관찰
+  pollJob();
+}
+
+/* 빈 문구(내용/시각)를 AI로 채우기 (main 메뉴 5번 이식) */
+async function genFill() {
+  if (S.jobRunning) { toast('이미 작업이 실행 중입니다.', 'warn'); return; }
+  if (!S.scenes.length) { toast('대본이 비어 있습니다.', 'warn'); return; }
+  const spec = {
+    steps: ['text'],
+    text_mode: 'fill',
+    api: document.getElementById('gen-api').value,
+    groq_model: genGroqModel(),
+    character: document.getElementById('gen-char').value.trim()
+  };
+
+  const stBox = document.getElementById('gen-status-box');
+  const stText = document.getElementById('gen-status-text');
+  if (stText) stText.textContent = 'AI가 빈 대사 및 시각 묘사를 채우고 있습니다...';
+  if (stBox) stBox.style.display = 'flex';
+
+  const res = await api('/api/run', { spec: spec, label: '빈 문구 채우기 (AI)' });
+  if (!res.ok) {
+    if (stBox) stBox.style.display = 'none';
+    toast('시작 실패: ' + (res.error || ''), 'err');
+    return;
+  }
+  S.jobRunning = true;
+  S.jobOwner = 'script';
+  toast('🧹 빈 문구 채우기를 시작했습니다. 잠시만 기다려주세요...', 'ok');
+  pollJob();
+}
+
+/* 선택 장면의 대사·묘사를 AI로 다시 작성 (main 메뉴 6번 이식) */
+async function regenSceneText() {
+  if (S.jobRunning) { toast('이미 작업이 실행 중입니다.', 'warn'); return; }
+  if (!confirm('장면 ' + S.selected + ' 의 대사·묘사를 AI로 다시 작성할까요?')) return;
+  const saved = await saveScript(true);
+  if (!saved || !saved.ok) return;
+  const spec = {
+    steps: ['text'],
+    text_mode: 'scene',
+    scene_index: S.selected,
+    api: document.getElementById('gen-api').value,
+    groq_model: genGroqModel(),
+    character: document.getElementById('gen-char').value.trim()
+  };
+  const res = await api('/api/run', { spec: spec, label: '장면 ' + S.selected + ' 대사 다시 작성' });
+  if (!res.ok) { toast('시작 실패: ' + (res.error || ''), 'err'); return; }
+  S.jobRunning = true;
+  toast('🤖 장면 ' + S.selected + ' 다시 작성을 시작했습니다 — ③ 제작 탭 로그에서 확인하세요.', 'ok');
+  showTab('build');
+  pollJob();
+}
+
+function renderScenes() {
+  const box = document.getElementById('scene-list');
+  const rows = S.data ? (S.data.scenes || []) : [];
+  box.innerHTML = S.scenes.map((sc, i) => {
+    const r = rows[i] || {};
+    const badges = [];
+    if (!r.image_exists) badges.push('<span class="badge no">이미지 없음</span>');
+    else if (r.visual_changed) badges.push('<span class="badge regen">이미지 재생성</span>');
+    else if (r.content_changed || r.overlay_changed) badges.push('<span class="badge overlay">텍스트만</span>');
+    else badges.push('<span class="badge ok">정상</span>');
+    if (!r.audio_exists) badges.push('<span class="badge no">음성 없음</span>');
+    if (r.has_hanja) badges.push('<span class="badge no">⚠️ 한자 포함</span>');
+    if (r.base_suspect) badges.push('<span class="badge regen" title="' + esc(r.base_suspect_reason || '') + '">⚠️ 원본 이상</span>');
+    return `
+    <div class="scene-card">
+      <div class="scene-head">
+        <span class="no">장면 ${i + 1}</span>
+        <input value="${esc(sc.time)}" placeholder="0~5초" oninput="updateScene(${i},'time',this.value)">
+        ${badges.join(' ')}
+        <span class="spacer"></span>
+        <button class="ghost" onclick="moveScene(${i},-1)" ${i === 0 ? 'disabled' : ''}>▲</button>
+        <button class="ghost" onclick="moveScene(${i},1)" ${i === S.scenes.length - 1 ? 'disabled' : ''}>▼</button>
+        <button class="danger" onclick="removeScene(${i})">🗑</button>
+      </div>
+      <div class="row">
+        <div class="grow"><label>내용 (이미지에 붙여넣을 대사 · TTS 음성)</label>
+          <textarea rows="2" oninput="updateScene(${i},'content',this.value)">${esc(sc.content)}</textarea></div>
+        <div class="grow"><label>시각 (이미지 생성용 묘사)</label>
+          <textarea rows="2" oninput="updateScene(${i},'visual',this.value)">${esc(sc.visual)}</textarea></div>
+      </div>
+    </div>`;
+  }).join('') || '<p class="hint">장면이 없습니다. “➕ 장면 추가”로 시작하세요.</p>';
+}
+
+function updateScene(i, key, value) {
+  if (!S.scenes[i]) return;
+  S.scenes[i][key] = value;
+  S.dirty = true;
+}
+function addScene() {
+  const last = S.scenes[S.scenes.length - 1];
+  const start = S.scenes.length * 5;
+  S.scenes.push({ time: `${start}~${start + 5}초`, content: '', visual: last ? last.visual : '' });
+  S.dirty = true;
+  renderScenes();
+}
+function removeScene(i) {
+  if (!confirm('장면 ' + (i + 1) + ' 을(를) 삭제할까요? (저장하면 파일에도 반영됩니다)')) return;
+  S.scenes.splice(i, 1);
+  S.dirty = true;
+  renderScenes();
+}
+function moveScene(i, d) {
+  const j = i + d;
+  if (j < 0 || j >= S.scenes.length) return;
+  const t = S.scenes[i]; S.scenes[i] = S.scenes[j]; S.scenes[j] = t;
+  S.dirty = true;
+  renderScenes();
+}
+function resequenceTime() {
+  S.scenes.forEach((sc, i) => { sc.time = `${i * 5}~${(i + 1) * 5}초`; });
+  S.dirty = true;
+  renderScenes();
+  toast('시간을 5초 간격으로 정리했습니다. (저장 필요)', 'warn');
+}
+function toggleRaw() {
+  const box = document.getElementById('raw-box');
+  box.classList.toggle('hidden');
+  if (!box.classList.contains('hidden')) {
+    document.getElementById('raw-text').value = stateToRawText();
+  }
+}
+function stateToRawText() {
+  return S.scenes.map((sc, i) =>
+    `[장면 ${i + 1}] ${sc.time || ''}\n  내용: ${sc.content || ''}\n  시각: ${sc.visual || ''}\n`).join('\n');
+}
+
+async function saveScript(silent, extra) {
+  if (S.jobRunning) { toast('작업 중에는 저장할 수 없습니다. (작업 완료 후 다시 시도)', 'warn'); return { ok: false, error: 'job-running' }; }
+  const body = { scenes: S.scenes, sync: true };
+  if (extra) {
+    if (extra.titles && extra.titles.length) body.titles = extra.titles;
+    if (extra.description != null) body.description = extra.description;
+  }
+  const res = await api('/api/script', body);
+  if (!res.ok) { toast('저장 실패: ' + (res.error || ''), 'err'); return res; }
+  S.dirty = false;
+  if (!silent) {
+    toast('✅ ' + res.message + '\n' + (res.sync && res.sync.summary ? res.sync.summary : ''), 'ok');
+  }
+  await loadState(!silent);
+  return res;
+}
+async function saveRaw() {
+  const res = await api('/api/script_text', { text: document.getElementById('raw-text').value });
+  if (!res.ok) { toast('저장 실패: ' + (res.error || ''), 'err'); return; }
+  toast('✅ ' + res.message, 'ok');
+  await loadState(true);
+}
+async function syncNow() {
+  const res = await saveScript(true);
+  if (res && res.ok) {
+    toast('🔁 script.txt → 체크포인트 동기화 완료\n' + (res.sync && res.sync.summary ? res.sync.summary : ''), 'ok');
+  }
+}
+
+/* ============================================================
+   ② 이미지 · 텍스트 탭
+   ============================================================ */
+function renderThumbs() {
+  const grid = document.getElementById('thumb-grid');
+  const rows = S.data ? (S.data.scenes || []) : [];
+  grid.innerHTML = rows.map(r => {
+    const badges = [];
+    if (!r.image_exists) badges.push('<span class="badge no">없음</span>');
+    else if (r.is_placeholder) badges.push('<span class="badge no">임시</span>');
+    else if (r.visual_changed) badges.push('<span class="badge regen">재생성</span>');
+    else if (r.content_changed || r.overlay_changed) badges.push('<span class="badge overlay">텍스트</span>');
+    else badges.push('<span class="badge ok">정상</span>');
+    const src = r.preview_url || '';
+    const inner = src
+      ? `<img loading="lazy" src="${esc(src)}" alt="장면 ${r.scene}">`
+      : `<div style="aspect-ratio:9/16;display:flex;align-items:center;justify-content:center;color:#6b7280;font-size:12px">이미지 없음</div>`;
+    return `<div class="thumb ${r.scene === S.selected ? 'sel' : ''}" onclick="selectScene(${r.scene})">
+      ${inner}
+      <div class="cap"><span>장면 ${r.scene}</span>${badges.join('')}</div>
+    </div>`;
+  }).join('') || '<p class="hint">이미지가 없습니다. ③ 제작 탭에서 이미지를 생성하세요.</p>';
+}
+
+function selectScene(n) {
+  S.selected = n;
+  const rows = S.data ? (S.data.scenes || []) : [];
+  const row = rows[n - 1] || {};
+  document.getElementById('sel-no').textContent = n;
+  document.getElementById('sel-content').value = S.scenes[n - 1] ? S.scenes[n - 1].content : '';
+  document.getElementById('preview-img').src = row.preview_url || row.image_url || '';
+  const audio = document.getElementById('scene-audio');
+  audio.src = row.audio_url || '';
+  document.querySelectorAll('.thumb').forEach((el, i) => el.classList.toggle('sel', i + 1 === n));
+  // 삽입 이미지 비율 로드 → 가이드 박스가 실제 표시 크기와 일치하게 계산
+  if (row.insert_url) {
+    const im = new Image();
+    im.onload = () => { _insRatioImg = im; updateInsGuide(); };
+    im.src = row.insert_url;
+  } else {
+    _insRatioImg = null;
+    updateInsGuide();
+  }
+  // 원본(base) 이상(단색 등)·임시 플레이스홀더 경고 — 삽입/그리기 전에 원본을 바꾸도록 안내
+  const wEl = document.getElementById('ins-warn');
+  if (wEl) {
+    if (row.is_placeholder) {
+      wEl.style.display = 'block';
+      wEl.innerHTML = '⚠️ 이 장면은 <b>아직 실제 AI 이미지가 없습니다</b> (임시 이미지).<br>' +
+        '🎨 <b>새 이미지 만들기</b>를 눌러 실제 이미지를 생성하세요. — 🖌 대사만 그리기는 글자만 그립니다.';
+    } else if (row.base_suspect) {
+      wEl.style.display = 'block';
+      wEl.innerHTML = '⚠️ 이 장면 원본 이미지가 <b>' + esc(row.base_suspect_reason || '단색/저분산') + '</b> 상태입니다.<br>' +
+        '🎨 <b>새 이미지 만들기</b> 또는 <b>🖼 다른 이미지 올리기(원본 등록)</b>로 원본을 바꾼 뒤 삽입·그리기를 하세요.';
+    } else {
+      wEl.style.display = 'none';
+    }
+  }
+}
+
+function onSelContentInput() {
+  const ta = document.getElementById('sel-content');
+  updateScene(S.selected - 1, 'content', ta.value);
+}
+
+async function previewSelected() {
+  const text = document.getElementById('sel-content').value;
+  const cfg = Object.assign({}, readCfg(), readInsCfg());
+  const res = await api('/api/preview', { scene: S.selected, text: text, config: cfg });
+  if (!res.ok) { toast('미리보기 실패', 'err'); return; }
+  document.getElementById('preview-img').src = res.url + '&r=' + Date.now();
+}
+
+async function drawSelected() {
+  const saved = await saveScript(true);
+  if (!saved || !saved.ok) return;
+  const res = await api('/api/overlay/apply', { scenes: [S.selected], config: Object.assign({}, readCfg(), readInsCfg()) });
+  if (!res.ok) { toast('합성 실패: ' + (res.error || ''), 'err'); return; }
+  toast('🖌 장면 ' + S.selected + ' 에 대사를 그렸습니다. (이미지 재생성 없음)', 'ok');
+  await loadState(true);
+}
+
+/* 이 장면 이미지만 다시 생성 (SD/Gemini) — 마음에 안 들 때 */
+async function regenSceneImage(btn) {
+  btn = btn || null;   // onclick="regenSceneImage(this)" 로 전달받음 (구형 전역 event 의존 제거)
+  const origBtnText = btn ? btn.textContent : '';
+  if (btn) btn.disabled = true;              // 누른 즉시 잠금 (중복 클릭 → '이미 실행 중' 오류 방지)
+
+  // 실행 중 상태 서버에 재확인
+  const chk = await api('/api/job');
+  if (chk && chk.running) {
+    if (btn) btn.disabled = false;
+    toast('이미 작업이 실행 중입니다: ' + (chk.label || '진행 중') + ' — 끝난 뒤 다시 눌러주세요.', 'warn');
+    return;
+  }
+  S.jobRunning = false;
+
+  const saved = await saveScript(true);
+  if (!saved || !saved.ok) {
+    if (btn) btn.disabled = false;
+    toast('대본 저장에 실패해 이미지 생성을 시작하지 못했습니다. (사유: ' + ((saved && saved.error) || '알 수 없음') + ')', 'err');
+    return;
+  }
+
+  const sceneModeEl = document.getElementById('scene-image-mode');
+  const buildModeEl = document.getElementById('image-mode');
+  const mode = (sceneModeEl && sceneModeEl.value) || (buildModeEl && buildModeEl.value) || 'sd_gguf';
+  const selNo = S.selected || 1;
+
+  const modeLabels = {
+    'sd_gguf': 'SD 3.5 Large (Q4)',
+    'sd_sdxl': 'SDXL-Turbo',
+    'gemini': 'Gemini API'
+  };
+  const modeLabel = modeLabels[mode] || mode;
+
+  if (btn) {
+    btn.disabled = true;
+    btn.textContent = `⏳ ${modeLabel} 생성 중...`;
+  }
+
+  const spec = {
+    steps: ['images', 'overlay'],                 // 새 이미지 생성 + 대사/삽입 다시 합성
+    scenes: { images: [selNo], overlay: [selNo] },
+    image_mode: mode
+    // overlay 설정은 일부러 넘기지 않음 → 저장된 overlay_config.json 을 그대로 사용
+    // (작업이 설정 파일을 덮어써서 "설정이 몰래 바뀐" 것처럼 보이는 문제 방지)
+  };
+  const t0 = Date.now();
+  S.jobOwner = 'image';     // 전역 pollJob 이 이 작업을 '대본 생성'으로 오인하지 않게
+
+  const res = await api('/api/run', { spec: spec, label: '장면 ' + selNo + ' 이미지 재생성' });
+  if (!res.ok) {
+    if (btn) { btn.disabled = false; btn.textContent = origBtnText; }
+    toast('시작 실패: ' + (res.error || ''), 'err');
+    return;
+  }
+  S.jobRunning = true;
+  lastLog = '';
+  document.getElementById('job-log').textContent = '장면 ' + selNo + ' (' + modeLabel + ') 이미지를 생성하는 중...\n';
+  toast('🎨 장면 ' + selNo + ' 이미지 생성 시작! (' + modeLabel + ')', 'ok');
+
+  // 작업 완료 대기 — 판정 불가 순간에는 '실패'로 단정하지 않는다
+  let nullTicks = 0;
+  const pollTimer = setInterval(async () => {
+    const st = await api('/api/job');
+    if (!st) return;
+    if (st.running === true) {
+      nullTicks = 0;
+      if (btn) btn.textContent = '⏳ ' + modeLabel + ' 생성 중... (' + Math.round((Date.now() - t0) / 1000) + '초)';
+      return;
+    }
+    const v = jobVerdict(st);
+    if (v === null) {
+      nullTicks++;
+      if (nullTicks < 30) return;               // 아직 로그 기록 중(또는 응답 이상) → 계속 확인
+      clearInterval(pollTimer);
+      S.jobRunning = false; S.jobOwner = null;
+      if (btn) { btn.disabled = false; btn.textContent = origBtnText; }
+      toast('작업 상태를 확인할 수 없습니다. ③ 제작 탭 로그를 보거나 새로 고침하세요.', 'warn');
+      return;
+    }
+    clearInterval(pollTimer);
+    S.jobRunning = false; S.jobOwner = null;
+    if (btn) { btn.disabled = false; btn.textContent = origBtnText; }
+    if (v) {
+      toast('🎉 장면 ' + selNo + ' 이미지 생성이 완료되었습니다!', 'ok');
+      await loadState(true);
+      selectScene(selNo);
+    } else {
+      toast('⚠️ 이미지 생성 실패. ' + (jobErrorLine(st.log) || '로그를 확인하세요.'), 'err');
+    }
+  }, 2000);
+}
+
+/* ---------- 음성 즉시 재생성 ---------- */
+async function _callTts(scenes) {
+  const res = await api('/api/tts', { scenes: scenes });
+  if (!res.ok) { toast('음성 생성 실패: ' + (res.error || ''), 'err'); return null; }
+  if (res.skipped) { toast(res.message || '다시 만들 음성이 없습니다.', 'warn'); return null; }
+  return res;
+}
+
+function _refreshSceneAudio() {
+  const rows = S.data ? (S.data.scenes || []) : [];
+  const row = rows[S.selected - 1] || {};
+  const audio = document.getElementById('scene-audio');
+  if (row.audio_url) audio.src = row.audio_url + (row.audio_url.includes('?') ? '&' : '?') + 'r=' + Date.now();
+}
+
+async function regenSceneAudio() {
+  const saved = await saveScript(true);          // 수정 중인 대사 먼저 저장
+  if (!saved || !saved.ok) return;
+  toast('🎤 장면 ' + S.selected + ' 음성 생성 중... (잠시만요)', 'ok');
+  const res = await _callTts([S.selected]);
+  if (!res) return;
+  toast('🎤 장면 ' + S.selected + ' 음성 완료' + (res.merged ? ' — 병합 음성도 갱신됨' : ''), 'ok');
+  _refreshSceneAudio();
+  await loadState(true);
+}
+
+async function regenChangedAudio() {
+  const saved = await saveScript(true);
+  if (!saved || !saved.ok) return;
+  const targets = (saved.plan || {}).audio_regen || [];
+  if (!targets.length) { toast('다시 만들 음성이 없습니다. (모두 최신)', 'warn'); return; }
+  toast('🎤 음성 생성 중... (' + targets.length + '장: ' + targets.join(',') + ')', 'ok');
+  const res = await _callTts(targets);
+  if (!res) return;
+  toast('🎤 음성 완료: ' + (res.done || []).length + '장' + (res.merged ? ' — 병합 음성도 갱신됨' : ''), 'ok');
+  _refreshSceneAudio();
+  await loadState(true);
+}
+
+async function regenAllAudio() {
+  const saved = await saveScript(true);
+  if (!saved || !saved.ok) return;
+  const count = S.data ? (S.data.count || (S.data.scenes || []).length) : 0;
+  if (!count) { toast('대본이 없습니다.', 'warn'); return; }
+  const all = Array.from({ length: count }, (_, i) => i + 1);
+  toast('🎤 전체 음성 재생성 중... (' + count + '장 · 몇 분 걸릴 수 있어요)', 'ok');
+  const res = await _callTts(all);
+  if (!res) return;
+  toast('🎤 전체 음성 완료: ' + (res.done || []).length + '장' + (res.merged ? ' — 병합 음성도 갱신됨' : ''), 'ok');
+  _refreshSceneAudio();
+  await loadState(true);
+}
+
+/* 모든 장면 이미지를 AI(SD/Gemini)로 다시 생성 — 장면 수 × 약 30초 소요 */
+async function regenAllImages(btn) {
+  btn = btn || null;
+  const origBtnText = btn ? btn.textContent : '';
+  if (btn) btn.disabled = true;              // 누른 즉시 잠금 (중복 클릭 → '이미 실행 중' 오류 방지)
+
+  const chk = await api('/api/job');
+  if (chk && chk.running) {
+    if (btn) btn.disabled = false;
+    toast('이미 작업이 실행 중입니다: ' + (chk.label || '진행 중') + ' — 끝난 뒤 다시 눌러주세요.', 'warn');
+    return;
+  }
+  S.jobRunning = false;
+
+  const count = S.data ? (S.data.count || (S.data.scenes || []).length) : 0;
+  if (!count) { if (btn) btn.disabled = false; toast('대본이 없습니다. 먼저 대본을 만들어 주세요.', 'warn'); return; }
+
+  const saved = await saveScript(true);
+  if (!saved || !saved.ok) {
+    if (btn) btn.disabled = false;
+    toast('대본 저장에 실패해 이미지 생성을 시작하지 못했습니다. (사유: ' + ((saved && saved.error) || '알 수 없음') + ')', 'err');
+    return;
+  }
+
+  const sceneModeEl = document.getElementById('scene-image-mode');
+  const buildModeEl = document.getElementById('image-mode');
+  const mode = (sceneModeEl && sceneModeEl.value) || (buildModeEl && buildModeEl.value) || 'sd_gguf';
+  const modeLabels = { 'sd_gguf': 'SD 3.5 Large (Q4)', 'sd_sdxl': 'SDXL-Turbo', 'gemini': 'Gemini API' };
+  const modeLabel = modeLabels[mode] || mode;
+  const estMin = Math.max(1, Math.round(count * 31 / 60));
+
+  if (!confirm('🎨 ' + count + '개 장면의 이미지를 AI로 전부 다시 만듭니다.\n\n'
+             + '· 모델: ' + modeLabel + '\n'
+             + '· 예상 시간: 약 ' + estMin + '분 (장면당 약 30초)\n'
+             + '· 지금까지 만든 원본(base) 그림이 새 그림으로 교체됩니다.\n\n'
+             + '계속할까요?')) { if (btn) btn.disabled = false; return; }
+
+  if (btn) { btn.disabled = true; btn.textContent = '⏳ ' + modeLabel + '로 ' + count + '장 생성 중...'; }
+
+  const spec = {
+    steps: ['images', 'overlay'],
+    scenes: { images: 'all', overlay: 'all' },     // 'all' = 전체 장면 (pipeline._scope_indices)
+    image_mode: mode
+    // overlay 설정은 일부러 넘기지 않음 → 저장된 overlay_config.json 을 그대로 사용
+    // (작업이 설정 파일을 덮어써서 "설정이 몰래 바뀐" 것처럼 보이는 문제 방지)
+  };
+  const t0 = Date.now();
+  S.jobOwner = 'image';     // 전역 pollJob 이 이 작업을 '대본 생성'으로 오인하지 않게
+
+  const res = await api('/api/run', { spec: spec, label: '전체 이미지 재생성 (' + count + '장 · ' + modeLabel + ')' });
+  if (!res.ok) {
+    if (btn) { btn.disabled = false; btn.textContent = origBtnText; }
+    toast('시작 실패: ' + (res.error || ''), 'err');
+    return;
+  }
+  S.jobRunning = true;
+  lastLog = '';
+  document.getElementById('job-log').textContent = '전체 ' + count + '장 (' + modeLabel + ') 이미지를 생성하는 중... 시간이 걸립니다.\n';
+  toast('🎨 전체 이미지 생성 시작! (' + count + '장 · ' + modeLabel + ')', 'ok');
+
+  let nullTicks = 0;
+  const pollTimer = setInterval(async () => {
+    const st = await api('/api/job');
+    if (!st) return;
+    if (st.running === true) {
+      nullTicks = 0;
+      if (btn) {   // 살아 있음을 보이게: 7/13장 + 경과 시간
+        const done = _logProgress(st.log, count);
+        btn.textContent = '⏳ ' + modeLabel + ' ' + done + '/' + count + '장... (' + Math.round((Date.now() - t0) / 1000) + '초)';
+      }
+      return;
+    }
+    const v = jobVerdict(st);
+    if (v === null) {
+      nullTicks++;
+      if (nullTicks < 30) return;               // 아직 로그 기록 중(또는 응답 이상) → 계속 확인
+      clearInterval(pollTimer);
+      S.jobRunning = false; S.jobOwner = null;
+      if (btn) { btn.disabled = false; btn.textContent = origBtnText; }
+      toast('작업 상태를 확인할 수 없습니다. ③ 제작 탭 로그를 보거나 새로 고침하세요.', 'warn');
+      return;
+    }
+    clearInterval(pollTimer);
+    S.jobRunning = false; S.jobOwner = null;
+    if (btn) { btn.disabled = false; btn.textContent = origBtnText; }
+    if (v) {
+      toast('🎉 전체 이미지 생성이 완료되었습니다! (' + count + '장)', 'ok');
+      await loadState(true);
+      selectScene(S.selected || 1);
+    } else {
+      toast('⚠️ 이미지 생성이 실패했습니다. ' + (jobErrorLine(st.log) || '로그를 확인하세요.'), 'err');
+    }
+  }, 3000);
+}
+
+async function uploadImage(input) {
+  const file = input.files && input.files[0];
+  if (!file) return;
+  const reader = new FileReader();
+  reader.onload = async () => {
+    const res = await api('/api/upload_image', { scene: S.selected, data_url: reader.result });
+    if (!res.ok) { toast('업로드 실패: ' + (res.error || res.reason || ''), 'err'); return; }
+    if (res.warn) toast('⚠️ ' + res.warn, 'warn');
+    toast('🖼 장면 ' + S.selected + ' 의 원본 이미지를 교체했습니다.', 'ok');
+    await loadState(true);
+  };
+  reader.readAsDataURL(file);
+  input.value = '';
+}
+
+/* ---------- 이미지 삽입 (박아 넣기) ---------- */
+// 미리보기 위에 삽입 프레임 가이드(점선 박스)를 그리고, 드래그로 위치·크기 조절 가능
+function _insGuideCfg() {
+  return {
+    x: (parseInt(document.getElementById('ins-x').value, 10) || 50) / 100,
+    y: (parseInt(document.getElementById('ins-y').value, 10) || 50) / 100,
+    w: (parseInt(document.getElementById('ins-w').value, 10) || 40) / 100,
+    h: (parseInt(document.getElementById('ins-h').value, 10) || 30) / 100
+  };
+}
+
+function _saveInsGuide(x, y, w, h) {
+  document.getElementById('ins-x').value = Math.round(x * 100);
+  document.getElementById('ins-y').value = Math.round(y * 100);
+  document.getElementById('ins-w').value = Math.round(w * 100);
+  document.getElementById('ins-h').value = Math.round(h * 100);
+  onInsChange();        // 라벨 갱신 + 실시간 미리보기
+}
+
+function updateInsGuide() {
+  const img = document.getElementById('preview-img');
+  const g = document.getElementById('ins-guide');
+  if (!img || !g) return;
+  const enabled = document.getElementById('ins-enable');
+  if (!enabled || !enabled.checked) { g.style.display = 'none'; return; }
+  const nw = img.naturalWidth, nh = img.naturalHeight;
+  if (!nw || !nh || !img.clientWidth) { g.style.display = 'none'; return; }
+  const rw = img.clientWidth, rh = img.clientHeight;
+  const ro = img.offsetLeft, roT = img.offsetTop;
+  const c = _insGuideCfg();
+  const ins = ovCurrent();                       // 삽입 이미지 실제 비율
+  let iw, ih;
+  if (ins) {
+    const ar = ins.naturalWidth / ins.naturalHeight;
+    ih = Math.min(rh * c.h, (rw * c.w) / ar);
+    iw = ih * ar;
+    if (iw > rw * c.w) { iw = rw * c.w; ih = iw / ar; }
+  } else {
+    iw = rw * c.w;
+    ih = rh * c.h;
+  }
+  const left = ro + rw * c.x - iw / 2;
+  const top = roT + rh * c.y - ih / 2;
+  g.style.display = 'block';
+  g.style.left = left + 'px';
+  g.style.top = top + 'px';
+  g.style.width = iw + 'px';
+  g.style.height = ih + 'px';
+}
+
+// 삽입 이미지 비율 캐시 (표시되는 장면 것)
+let _insRatioImg = null;
+function ovCurrent() {
+  if (!_insRatioImg) return null;
+  const rows = S.data ? (S.data.scenes || []) : [];
+  const row = rows[S.selected - 1] || {};
+  return row.insert_exists ? _insRatioImg : null;
+}
+
+function bindInsGuide() {
+  const img = document.getElementById('preview-img');
+  const g = document.getElementById('ins-guide');
+  if (!img || !g || img.dataset.insBound) { updateInsGuide(); return; }
+  img.dataset.insBound = '1';
+  img.addEventListener('load', () => { updateInsGuide(); });
+  window.addEventListener('resize', updateInsGuide);
+
+  // 드래그로 이동 / 모서리·모서리영역 드래그로 크기 조절
+  let drag = null;
+  const startDrag = (e, mode) => {
+    if (!document.getElementById('ins-enable').checked) return;
+    e.preventDefault(); e.stopPropagation();
+    const c = _insGuideCfg();
+    const gw = g.offsetWidth, gh = g.offsetHeight;
+    const cx = parseFloat(g.style.left) + gw / 2, cy = parseFloat(g.style.top) + gh / 2;
+    drag = { mode, sx: e.clientX, sy: e.clientY, c0: c,
+             gw: gw, gh: gh,
+             gx: e.clientX - cx, gy: e.clientY - cy };   // 그랩 오프셋 (박스가 포인터에 안 튐)
+  };
+  g.style.pointerEvents = 'auto';
+  g.style.cursor = 'move';
+  g.addEventListener('mousedown', e => startDrag(e, 'move'));
+  // 우하단 리사이즈 핸들 (드래그로 크기 조절)
+  const handle = document.createElement('div');
+  handle.style.cssText = 'position:absolute;right:-7px;bottom:-7px;width:14px;height:14px;'
+    + 'background:#ffcc00;border:2px solid #7a5c00;border-radius:3px;cursor:nwse-resize;z-index:2';
+  g.appendChild(handle);
+  handle.addEventListener('mousedown', e => startDrag(e, 'resize'));
+  g.addEventListener('touchstart', e => startDrag(e.touches[0], 'move'), { passive: false });
+  window.addEventListener('mousemove', e => {
+    if (!drag) return;
+    e.preventDefault();
+    const img = document.getElementById('preview-img');
+    const rw = img.clientWidth, rh = img.clientHeight;
+    if (drag.mode === 'move') {
+      // 그랩 오프셋 유지 → 박스가 포인터를 그대로 따라감 (점프 없음)
+      let nx = e.clientX - drag.gx, ny = e.clientY - drag.gy;
+      nx = Math.max(img.offsetLeft + drag.gw / 2, Math.min(img.offsetLeft + rw - drag.gw / 2, nx));
+      ny = Math.max(img.offsetTop + drag.gh / 2, Math.min(img.offsetTop + rh - drag.gh / 2, ny));
+      const cx = (nx - img.offsetLeft) / rw, cy = (ny - img.offsetTop) / rh;
+      _saveInsGuide(cx, cy, drag.c0.w, drag.c0.h);
+    } else {                                     // resize: 우하단 핸들 (비율 유지면 높이 비례)
+      const iw = Math.max(30, drag.gw + (e.clientX - drag.sx));
+      const ih = document.getElementById('ins-ratio').value === '1'
+        ? drag.gh * (iw / drag.gw) : Math.max(30, drag.gh + (e.clientY - drag.sy));
+      _saveInsGuide(drag.c0.x, drag.c0.y, Math.min(1, iw / rw), Math.min(1, ih / rh));
+    }
+  });
+  window.addEventListener('mouseup', () => { drag = null; });
+  window.addEventListener('touchend', () => { drag = null; });
+}
+
+function readInsCfg() {
+  return {
+    enabled: true,
+    frame: document.getElementById('ins-frame').value,
+    keep_ratio: document.getElementById('ins-ratio').value === '1',
+    x: (parseInt(document.getElementById('ins-x').value, 10) || 50) / 100,
+    y: (parseInt(document.getElementById('ins-y').value, 10) || 50) / 100,
+    w: (parseInt(document.getElementById('ins-w').value, 10) || 40) / 100,
+    h: (parseInt(document.getElementById('ins-h').value, 10) || 30) / 100,
+    border_width: parseInt(document.getElementById('ins-b').value, 10),
+    border_color: document.getElementById('ins-border').value,
+    frame_color: document.getElementById('ins-framec').value,
+    tv_color: document.getElementById('ins-tvc').value,
+    shadow: document.getElementById('ins-shadow').value === '1'
+  };
+}
+
+function writeInsCfg(cfg) {
+  const set = (id, v, suf) => {
+    const el = document.getElementById(id);
+    if (el) el.value = v;
+    const lab = document.getElementById(id + '-v');
+    if (lab) lab.textContent = (suf ? Math.round(v * 100) + suf : v);
+  };
+  if (!cfg) cfg = {};
+  const en = document.getElementById('ins-enable');
+  if (en) en.checked = !!cfg.enabled;
+  document.getElementById('ins-frame').value = cfg.frame || 'rect';
+  document.getElementById('ins-ratio').value = (cfg.keep_ratio === false) ? '0' : '1';
+  set('ins-x', cfg.x == null ? 0.5 : cfg.x, '%');
+  set('ins-y', cfg.y == null ? 0.5 : cfg.y, '%');
+  set('ins-w', cfg.w == null ? 0.4 : cfg.w, '%');
+  set('ins-h', cfg.h == null ? 0.3 : cfg.h, '%');
+  set('ins-b', cfg.border_width == null ? 8 : cfg.border_width, 'px');
+  document.getElementById('ins-border').value = cfg.border_color || '#222222';
+  document.getElementById('ins-framec').value = cfg.frame_color || '#8B5A2B';
+  document.getElementById('ins-tvc').value = cfg.tv_color || '#111111';
+  document.getElementById('ins-shadow').value = (cfg.shadow === false) ? '0' : '1';
+  if (en) setInsEnabled(en.checked);
+  updateInsGuide();
+}
+
+function onInsChange() {
+  // 라벨 갱신
+  const pct = id => {
+    const el = document.getElementById(id);
+    const lab = document.getElementById(id + '-v');
+    if (el && lab) lab.textContent = el.value + '%';
+  };
+  pct('ins-x'); pct('ins-y'); pct('ins-w'); pct('ins-h');
+  const b = document.getElementById('ins-b');
+  const bv = document.getElementById('ins-b-v');
+  if (b && bv) bv.textContent = b.value + 'px';
+  updateInsGuide();          // 미리보기 위 가이드 박스 즉시 갱신
+  // 실시간 미리보기 (디바운스)
+  clearTimeout(window.__insPv);
+  window.__insPv = setTimeout(() => { if (S.selected) previewSelected(); }, 250);
+}
+
+function setInsEnabled(on) {
+  const ids = ['ins-frame','ins-ratio','ins-x','ins-y','ins-w','ins-h','ins-b',
+               'ins-border','ins-framec','ins-tvc','ins-shadow'];
+  ids.forEach(id => { const el = document.getElementById(id); if (el) el.disabled = !on; });
+  updateInsGuide();
+  clearTimeout(window.__insPv);
+  window.__insPv = setTimeout(() => { if (S.selected) previewSelected(); }, 150);
+}
+
+async function uploadInsert(input) {
+  const file = input.files && input.files[0];
+  if (!file) return;
+  const reader = new FileReader();
+  reader.onload = async () => {
+    // 현재 슬라이더 위치/크기 설정을 먼저 저장 → 업로드 즉시 그 위치에 삽입됨
+    await api('/api/overlay', { config: Object.assign({}, readCfg(), readInsCfg()), apply: 'none' });
+    const res = await api('/api/insert_image', { scene: S.selected, data_url: reader.result });
+    if (!res.ok) { toast('삽입 실패: ' + (res.error || res.reason || ''), 'err'); return; }
+    if (res.warn) toast('⚠️ ' + res.warn, 'warn');
+    toast('🖼 장면 ' + S.selected + ' 에 이미지를 삽입했습니다. 위치·크기를 조절한 뒤 🖌 다시 삽입하세요.', 'ok');
+    await loadState(true);
+    if (S.data) {
+      const row = (S.data.scenes || [])[S.selected - 1] || {};
+      if (row.insert_url) {
+        const im = new Image();
+        im.onload = () => { _insRatioImg = im; updateInsGuide(); };
+        im.src = row.insert_url;
+      }
+    }
+  };
+  reader.readAsDataURL(file);
+  input.value = '';
+}
+
+async function applyInsert() {
+  const saved = await saveScript(true);
+  if (!saved || !saved.ok) return;
+  const cfg = Object.assign({}, readCfg(), readInsCfg());
+  const res = await api('/api/overlay/apply', { scenes: [S.selected], config: cfg });
+  if (!res.ok) { toast('삽입 실패: ' + (res.error || ''), 'err'); return; }
+  toast('🖌 장면 ' + S.selected + ' 에 이미지를 삽입했습니다.', 'ok');
+  await loadState(true);
+}
+
+async function saveInsertCfg() {
+  // 설정 저장 + 선택 장면에 즉시 반영 (저장만 하고 반영 안 되던 문제 해결)
+  const cfg = Object.assign({}, readCfg(), readInsCfg());
+  const res = await api('/api/overlay/apply', { scenes: [S.selected], config: cfg });
+  if (!res.ok) { toast('삽입 저장 실패: ' + (res.error || ''), 'err'); return; }
+  toast('💾 삽입 설정을 저장하고 장면 ' + S.selected + ' 에 반영했습니다.', 'ok');
+  await loadState(true);
+}
+
+async function removeInsert() {
+  const res = await api('/api/insert_image', { scene: S.selected, remove: true });
+  if (!res.ok) { toast('제거 실패: ' + (res.error || ''), 'err'); return; }
+  toast(res.removed ? '🗑 삽입 이미지를 제거하고 원본+텍스트 상태로 되돌렸습니다.'
+                    : '삽입 이미지가 없습니다.', res.removed ? 'ok' : 'warn');
+  await loadState(true);
+}
+
+/* ---------- 텍스트 스타일 설정 ---------- */
+function readCfg() {
+  return {
+    style: document.getElementById('cfg-style').value || 'bubble',
+    position: document.getElementById('cfg-position').value || 'top',
+    font_size: parseInt(document.getElementById('cfg-font').value, 10) || 52,
+    box_alpha: parseInt(document.getElementById('cfg-alpha').value, 10),
+    text_color: document.getElementById('cfg-text').value,
+    box_color: document.getElementById('cfg-box').value,
+    max_lines: parseInt(document.getElementById('cfg-lines').value, 10) || 5
+  };
+}
+
+function writeCfg(cfg) {
+  const d = S.data || {};
+  const styleSel = document.getElementById('cfg-style');
+  const posSel = document.getElementById('cfg-position');
+  if (!styleSel.options.length) {
+    styleSel.innerHTML = Object.entries(d.styles || {})
+      .map(([k, v]) => `<option value="${k}">${esc(v)}</option>`).join('');
+    posSel.innerHTML = Object.entries(d.positions || {})
+      .map(([k, v]) => `<option value="${k}">${esc(v)}</option>`).join('');
+  }
+  styleSel.value = cfg.style || 'bubble';
+  posSel.value = cfg.position || 'top';
+  document.getElementById('cfg-font').value = cfg.font_size || 52;
+  document.getElementById('cfg-font-v').textContent = (cfg.font_size || 52) + 'px';
+  document.getElementById('cfg-alpha').value = (cfg.box_alpha == null ? 235 : cfg.box_alpha);
+  document.getElementById('cfg-alpha-v').textContent = (cfg.box_alpha == null ? 235 : cfg.box_alpha);
+  document.getElementById('cfg-text').value = cfg.text_color || '#111111';
+  document.getElementById('cfg-box').value = cfg.box_color || '#ffffff';
+  document.getElementById('cfg-lines').value = cfg.max_lines || 5;
+  document.getElementById('cfg-lines-v').textContent = (cfg.max_lines || 5) + '줄';
+}
+function renderOverlayPanel() {
+  const ocfg = (S.data && S.data.overlay) || {};
+  writeCfg(ocfg);
+  writeInsCfg(ocfg);          // 삽입(박아 넣기) 설정도 함께 반영
+  selectScene(S.selected || 1);
+}
+function onCfgChange() {
+  document.getElementById('cfg-font-v').textContent = document.getElementById('cfg-font').value + 'px';
+  document.getElementById('cfg-alpha-v').textContent = document.getElementById('cfg-alpha').value;
+  document.getElementById('cfg-lines-v').textContent = document.getElementById('cfg-lines').value + '줄';
+  clearTimeout(window.__pv);
+  window.__pv = setTimeout(() => { if (S.selected) previewSelected(); }, 250);
+}
+async function saveCfg(scope) {
+  // 텍스트 설정만 저장하더라도 삽입(enabled 등) 설정이 초기화되지 않도록 함께 전송
+  const res = await api('/api/overlay', { config: Object.assign({}, readCfg(), readInsCfg()), apply: scope });
+  if (!res.ok) { toast('설정 저장 실패: ' + (res.error || ''), 'err'); return; }
+  if (scope === 'none') toast('💾 스타일 설정을 저장했습니다.', 'ok');
+  else toast('🎨 다시 그리기 완료: ' + (((res.applied || {}).count) || 0) + '장', 'ok');
+  await loadState(true);
+}
+
+/* ============================================================
+   ③ 제작 탭
+   ============================================================ */
+function renderBuildPanel() {
+  const d = S.data || {};
+  const modeSel = document.getElementById('image-mode');
+  if (!modeSel.options.length) {
+    modeSel.innerHTML = Object.entries(d.image_modes || {})
+      .map(([k, v]) => `<option value="${k}">${esc(v)}</option>`).join('');
+    modeSel.value = 'sd_gguf';
+    document.getElementById('speed').value = d.default_speed;
+  }
+  const t = document.getElementById('title-input');
+  if (document.activeElement !== t) t.value = (d.titles || [])[0] || '';
+  const desc = document.getElementById('desc-input');
+  if (document.activeElement !== desc) desc.value = d.description || '';
+
+  const plan = d.plan || {};
+  const fmt = arr => (arr && arr.length ? arr.join(', ') : '없음');
+  document.getElementById('plan-box').textContent =
+    (plan.summary || '') +
+    '\n\n[상세]' +
+    '\n이미지 다시 생성 : ' + fmt(plan.image_regen) +
+    '\n텍스트만 다시 그림 : ' + fmt(plan.image_overlay) +
+    '\n음성 다시 생성 : ' + fmt(plan.audio_regen) +
+    '\n변경 감지 기준 : ' + (plan.baseline ? '있음' : '없음');
+}
+
+/* ============================================================
+   ④ 영상 · 업로드 탭
+   ============================================================ */
+function renderVideoPanel() {
+  const d = S.data || {};
+  const sel = document.getElementById('v-title');
+  const titles = d.titles || [];
+  const keep = sel.value;
+  sel.innerHTML = titles.map((t, i) => `<option value="${i}">${esc(t)}</option>`).join('')
+    || '<option value="0">자동 생성 영상</option>';
+  if (keep && [...sel.options].some(o => o.value === keep)) sel.value = keep;
+
+  const sp = document.getElementById('v-speed');
+  if (document.activeElement !== sp && d.default_speed != null) sp.value = d.default_speed;
+
+  const t = document.getElementById('v-title-input');
+  if (document.activeElement !== t) t.value = titles[0] || '';
+  const desc = document.getElementById('v-desc-input');
+  if (document.activeElement !== desc) desc.value = d.description || '';
+
+  const plan = d.plan || {};
+  const fmt = arr => (arr && arr.length ? arr.join(', ') : '없음');
+  document.getElementById('v-plan-box').textContent =
+    (plan.summary || '(제작 계획 없음 — ③ 탭에서 이미지·음성을 생성하면 표시됩니다)') +
+    '\n\n▼ 이 목록이 영상에 반영되려면\n   "변경분 자동 반영" 선택이 필요합니다\n   (안 함 = 옛 이미지/음성으로 합성)' +
+    '\n\n[상세]' +
+    '\n이미지 다시 생성 : ' + fmt(plan.image_regen) +
+    '\n텍스트만 다시 그림 : ' + fmt(plan.image_overlay) +
+    '\n음성 다시 생성 : ' + fmt(plan.audio_regen) +
+    '\n최신 체크포인트 : ' + ((d.checkpoint || {}).exists ? '있음' : '없음');
+}
+
+async function saveTitles2() {
+  const res = await api('/api/script', {
+    scenes: S.scenes, sync: true,
+    titles: [document.getElementById('v-title-input').value.trim() || '자동 생성 영상'],
+    description: document.getElementById('v-desc-input').value
+  });
+  if (!res.ok) { toast('저장 실패: ' + (res.error || ''), 'err'); return; }
+  toast('💾 제목/설명을 저장했습니다.', 'ok');
+  await loadState(false);
+}
+
+function videoSpec(steps) {
+  return {
+    steps,
+    overlay: readCfg(),
+    speed: parseFloat(document.getElementById('v-speed').value) || 1.0,
+    privacy: document.getElementById('v-privacy').value,
+    title_index: parseInt(document.getElementById('v-title').value || '0', 10) || 0,
+    titles: [document.getElementById('v-title-input').value.trim() || '자동 생성 영상'],
+    description: document.getElementById('v-desc-input').value
+  };
+}
+
+function jobStarted(res, msg) {
+  if (!res.ok) { toast('시작 실패: ' + (res.error || ''), 'err'); return false; }
+  lastLog = '';
+  ['job-log', 'job-log-2'].forEach(id => {
+    const el = document.getElementById(id);
+    if (el) el.textContent = msg + '\n';
+  });
+  toast(msg, 'ok');
+  pollJob();
+  return true;
+}
+
+async function buildVideoNow() {
+  if (S.jobRunning) { toast('이미 작업이 실행 중입니다.', 'warn'); return; }
+  if (!await confirmSyncSkip()) return;
+  // 제목/설명을 saveScript(loadState → 입력 초기화) "전에" 먼저 확보 —
+  // 안 그러면 고쳐둔 값이 되돌려져 영상 파일명에 옛 제목이 들어감
+  const td = currentTitleDesc();
+  const saved = await saveScript(true, td);
+  if (!saved || !saved.ok) { toast('대본 저장 실패로 영상을 만들 수 없습니다.', 'err'); return; }
+  const spec = videoSpec([]);
+  if (td.titles.length) spec.titles = td.titles;
+  spec.description = td.description;
+  if (document.getElementById('v-sync').value === '1') spec.steps.push('overlay', 'tts');
+  spec.steps.push('video');
+  const res = await api('/api/run', { spec, label: '영상 생성' });
+  jobStarted(res, '🎬 영상 생성을 시작했습니다 — 아래 로그에서 진행 상황을 보세요');
+}
+
+/* '안 함(바로 합성)'인데 반영 안 된 변경분이 있으면 확인창 —
+   옛 텍스트/음성이 영상에 그대로 들어가는 사고 방지 */
+function confirmSyncSkip() {
+  if (document.getElementById('v-sync').value === '1') return true;
+  const plan = (S.data || {}).plan || {};
+  const pending = [].concat(plan.image_overlay || [], plan.audio_regen || [], plan.image_regen || []);
+  if (!pending.length) return true;
+  return confirm(`⚠ 반영되지 않은 변경분이 있습니다.\n` +
+    `  · 텍스트 다시 그려야 할 장면: ${(plan.image_overlay || []).join(', ') || '없음'}\n` +
+    `  · 음성 다시 생성 대상: ${(plan.audio_regen || []).join(', ') || '없음'}\n\n` +
+    `"바로 합성"을 선택했으므로 옛 이미지/음성이 영상에 그대로 들어갑니다.\n` +
+    `그래도 진행할까요? (취소를 누르면 중단됩니다 — 위 옵션을 "변경분 자동 반영"으로 바꿔 다시 시작하세요)`);
+}
+
+async function uploadVideoNow(withVideo) {
+  if (S.jobRunning) { toast('이미 작업이 실행 중입니다.', 'warn'); return; }
+  if (withVideo && !await confirmSyncSkip()) return;
+  // 제목/설명을 saveScript 전에 먼저 확보 (loadState가 입력을 옛값으로 되돌리는 증상 방지)
+  const td = currentTitleDesc();
+  const saved = await saveScript(true, td);
+  if (!saved || !saved.ok) { toast('대본 저장 실패로 업로드할 수 없습니다.', 'err'); return; }
+  // 업로드 전 최종 확인 (main.py 단계 5의 확인 단계 이식)
+  const title = (td.titles[0] || '').trim() || '(자동 생성 영상)';
+  const privSel = document.getElementById('v-privacy');
+  const privLabel = (privSel.selectedOptions[0] || {}).text || privSel.value;
+  const okGo = confirm(
+    '📤 유튜브 업로드 정보를 확인하세요.\n\n' +
+    '  · 제목: ' + title + '\n' +
+    '  · 공개 설정: ' + privLabel + '\n' +
+    '  · 영상: ' + (withVideo ? '지금 새로 생성한 영상' : 'output/videos 의 최신 영상') + '\n\n' +
+    '업로드하시겠습니까?');
+  if (!okGo) { toast('업로드가 취소되었습니다.', 'warn'); return; }
+  const spec = videoSpec([]);
+  if (td.titles.length) spec.titles = td.titles;
+  spec.description = td.description;
+  if (withVideo) {
+    if (document.getElementById('v-sync').value === '1') spec.steps.push('overlay', 'tts');
+    spec.steps.push('video');
+  }
+  spec.steps.push('upload');
+  const label = withVideo ? '영상 생성 → 유튜브 업로드' : '유튜브 업로드';
+  const res = await api('/api/run', { spec, label });
+  const msg = withVideo
+    ? '🎬+📤 영상 생성 후 업로드를 시작했습니다 (최초 1회 구글 로그인 창이 열립니다)'
+    : '📤 유튜브 업로드를 시작했습니다 (최초 1회 구글 로그인 창이 열립니다)';
+  jobStarted(res, msg);
+}
+
+async function saveTitles() {
+  const res = await api('/api/script', {
+    scenes: S.scenes, sync: true,
+    titles: [document.getElementById('title-input').value.trim() || '자동 생성 영상'],
+    description: document.getElementById('desc-input').value
+  });
+  if (!res.ok) { toast('저장 실패: ' + (res.error || ''), 'err'); return; }
+  toast('💾 제목/설명을 저장했습니다.', 'ok');
+  await loadState(false);
+}
+
+function resolveScope(id) {
+  const v = scopeValue(id);
+  if (v === 'pick') return numList(document.getElementById('pick-scenes').value);
+  return v;
+}
+
+async function startBuild() {
+  if (S.jobRunning) { toast('이미 작업이 실행 중입니다.', 'warn'); return; }
+  // 제목/설명을 saveScript 전에 먼저 확보 (loadState가 입력을 옛값으로 되돌리는 증상 방지)
+  const td = currentTitleDesc();
+  const saved = await saveScript(true, td);          // script.txt 최신화 (+체크포인트 동기화, 제목·설명 포함)
+  if (!saved || !saved.ok) { toast('대본 저장 실패로 제작을 시작할 수 없습니다.', 'err'); return; }
+
+  const spec = {
+    steps: [],
+    scenes: {
+      images: resolveScope('scope-images'),
+      overlay: resolveScope('scope-overlay'),
+      tts: resolveScope('scope-tts')
+    },
+    image_mode: scopeValue('image-mode'),
+    overlay: readCfg(),
+    speed: parseFloat(document.getElementById('speed').value) || 1.0,
+    titles: td.titles.length ? td.titles
+            : [document.getElementById('title-input').value.trim() || '자동 생성 영상'],
+    description: td.description
+  };
+  if (spec.scenes.images !== 'none') spec.steps.push('images');
+  if (spec.scenes.overlay !== 'none') spec.steps.push('overlay');
+  if (spec.scenes.tts !== 'none') spec.steps.push('tts');
+  if (scopeValue('do-video') === '1') spec.steps.push('video');
+  if (!spec.steps.length) { toast('실행할 단계가 없습니다.', 'warn'); return; }
+
+  const res = await api('/api/run', { spec: spec, label: spec.steps.join(' → ') });
+  if (!res.ok) { toast('시작 실패: ' + (res.error || ''), 'err'); return; }
+  S.jobRunning = true;
+  lastLog = '';
+  document.getElementById('job-log').textContent = '작업을 시작했습니다...\n';
+  toast('🚀 제작 시작: ' + spec.steps.join(' → '), 'ok');
+  showTab('build');
+  pollJob();
+}
+
+async function stopBuild() {
+  const res = await api('/api/job/stop', {});
+  toast(res.ok ? '⏹ 작업을 중지했습니다.' : ('중지 실패: ' + (res.error || '')), res.ok ? 'warn' : 'err');
+  pollJob();
+}
+
+/* ---------- 작업(job) 판정 헬퍼 ---------- */
+/* 로그 문자열에서 'n/총' 진행값을 뽑는다 (예: "[7/13]") */
+function _logProgress(log, total) {
+  if (!total) return 0;
+  const all = String(log || '').match(new RegExp('\\[\\d+/' + total + '\\]', 'g')) || [];
+  if (!all.length) return 0;
+  return parseInt(all[all.length - 1].match(/\d+/)[0], 10) || 0;
+}
+
+/* 작업 종료 판정: true=성공 / false=실패 / null=아직 판정 불가(계속 확인)
+   - 워커가 로그 끝에 남기는 JOB_RESULT 가 가장 확실한 신호 (서버가 재시작돼도 로그 파일은 남는다)
+   - 그 다음이 종료코드. 둘 다 없으면 "실패"로 단정하지 않고 보류한다
+   - (오판 사례: 이미지 13장을 정상 생성하고도 '일부 장면 생성에 실패했습니다' 토스트가 뜸) */
+function jobVerdict(st) {
+  if (!st || st.running === undefined) return null;      // 응답 자체가 비정상 → 보류
+  const log = String(st.log || '');
+  const i = log.lastIndexOf('JOB_RESULT=');
+  if (i >= 0) {
+    const tail = log.slice(i + 'JOB_RESULT='.length);
+    const s = tail.indexOf('{');
+    const e = tail.lastIndexOf('}');
+    if (s >= 0 && e > s) {
+      try { return !!JSON.parse(tail.slice(s, e + 1)).ok; } catch (err) { return null; }
+    }
+    return null;
+  }
+  if (typeof st.returncode === 'number') return st.returncode === 0;
+  return null;
+}
+
+/* 로그에서 사람이 읽을 오류 줄 추출 — "✅ 이미지 완료: 13장 / 실패 0장" 같은 성공 문구는 제외 */
+function jobErrorLine(log) {
+  const lines = String(log || '').split('\n').map(l => l.trim()).filter(Boolean);
+  for (let i = lines.length - 1; i >= 0; i--) {
+    const l = lines[i];
+    if (/실패\s*0|실패\s*[:：]\s*0/.test(l)) continue;
+    if (l.includes('Traceback') || l.includes('❌') || l.includes('실패한 단계')) return l;
+  }
+  return '';
+}
+
+let lastLog = '';
+async function pollJob() {
+  let res;
+  try { res = await (await fetch('/api/job')).json(); } catch (e) { return; }
+  const running = !!res.running;
+  const logEls = [document.getElementById('job-log'), document.getElementById('job-log-2')].filter(Boolean);
+  if (res.log && res.log !== lastLog) {
+    lastLog = res.log;
+    logEls.forEach(el => { el.textContent = res.log; el.scrollTop = el.scrollHeight; });
+  }
+  const statusText = running
+    ? `⏳ 실행 중 (${res.label || ''} · 시작 ${res.started || ''})`
+    : (res.returncode === 0 ? '✅ 마지막 작업 성공'
+       : (res.returncode == null ? '대기' : '⚠️ 마지막 작업 종료 코드 ' + res.returncode));
+  ['job-status', 'job-status-2'].forEach(id => {
+    const el = document.getElementById(id);
+    if (el) el.textContent = statusText;
+  });
+  document.getElementById('chip-job').textContent = running ? '⏳ 작업 중' : '대기';
+
+  if (running) {
+    const stBox = document.getElementById('gen-status-box');
+    const stText = document.getElementById('gen-status-text');
+    if (stBox && stBox.style.display !== 'none' && stText && res.log) {
+      const lines = res.log.trim().split('\n').map(l => l.trim()).filter(Boolean);
+      const lastLine = lines.slice(-1)[0] || '';
+      if (lastLine) stText.textContent = lastLine;
+    }
+  }
+
+  if (S.jobRunning && !running) {
+    if (res.running === undefined) return res;          // 응답이 비정상 → 다음 틱에 재확인 (실패로 단정 금지)
+    const v = jobVerdict(res);                          // null = 아직 판정 불가 (로그 기록 중)
+    if (v === null) {
+      S.jobUnk = (S.jobUnk || 0) + 1;
+      if (S.jobUnk < 30) return res;
+    }
+    S.jobUnk = 0;
+    S.jobRunning = false;
+    const owner = S.jobOwner; S.jobOwner = null;
+    const stBox = document.getElementById('gen-status-box');
+    const stText = document.getElementById('gen-status-text');
+    const btnGen = document.getElementById('btn-gen-script');
+    if (owner === 'script' && btnGen) { btnGen.disabled = false; btnGen.textContent = '🤖 AI 대본 만들기'; }
+
+    if (v !== false) {
+      if (owner === 'script' && stBox) stBox.style.display = 'none';
+      if (owner !== 'image') {   // 이미지 버튼은 자기 폴러가 진행률·완료 토스트를 담당
+        toast(owner === 'script'
+          ? '🎉 대본 생성이 완료되었습니다! 아래에 장면별 대사와 시각 묘사가 펼쳐집니다.'
+          : '🎉 ' + (res.label || '작업') + ' 완료', 'ok');
+      }
+      loadState(true);
+    } else {
+      // 오류 시 워커 로그의 진짜 오류 줄 노출 ("실패 0장" 같은 성공 문구는 제외)
+      const errMsg = jobErrorLine(res.log) || '작업 중 오류가 발생했습니다.';
+      if (owner === 'script' && stBox && stText) {
+        stBox.style.display = 'flex';
+        stBox.style.background = '#fef2f2';
+        stBox.style.border = '1.5px solid #f87171';
+        stBox.style.color = '#991b1b';
+        stText.innerHTML = `⚠️ <b>오류 안내:</b> ${esc(errMsg)} <br>
+          <button class="ghost" onclick="document.getElementById('gen-api').value='groq';onGenApiChange();toast('텍스트 API를 Groq로 변경했습니다. 다시 시도해보세요!','ok');" 
+                  style="margin-top:6px;background:#fee2e2;border:1px solid #ef4444;color:#991b1b;padding:2px 8px;font-size:12px">
+            👉 텍스트 API를 'Groq'로 변경하여 다시 시도하기
+          </button>`;
+      }
+      toast('⚠️ ' + errMsg, 'err');
+    }
+    return res;
+  }
+  S.jobRunning = running;
+  return res;
+}
+
+/* ---------- 초기화 ---------- */
+// 이미지 로드 실패(파일 없음/삭제됨) 시 깨진 아이콘 처리
+document.addEventListener('error', e => {
+  const el = e.target;
+  if (!el || el.tagName !== 'IMG') return;
+  // 메인 미리보기 태그(#preview-img)는 절대 DOM에서 삭제하지 않음
+  if (el.id === 'preview-img') {
+    el.style.opacity = '0.3';
+    return;
+  }
+  const div = document.createElement('div');
+  div.style.cssText = 'aspect-ratio:9/16;display:flex;align-items:center;justify-content:center;'
+    + 'color:#6b7280;font-size:12px;background:#f3f4f6;border-radius:8px';
+  div.textContent = '이미지 없음';
+  el.replaceWith(div);
+}, true);
+// 삽입 프레임 가이드(드래그 조절) 활성화
+bindInsGuide();
+document.addEventListener('keydown', e => {
+  if ((e.ctrlKey || e.metaKey) && e.key === 's') { e.preventDefault(); saveScript(); }
+});
+// 아이디어 입력창에서 Enter 키 입력 시 대본 생성 실행
+const ideaInput = document.getElementById('gen-idea');
+if (ideaInput) {
+  ideaInput.addEventListener('keydown', e => {
+    if (e.key === 'Enter') { e.preventDefault(); genScript(); }
+  });
+}
+setInterval(pollJob, 1500);
+loadState(false).then(() => selectScene(S.selected || 1));
+</script>
+</body>
+</html>
