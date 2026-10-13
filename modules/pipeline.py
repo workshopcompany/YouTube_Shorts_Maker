@@ -247,7 +247,7 @@ def render_overlays(script: list = None, indices=None, cfg: dict = None, log=pri
 # 3) 음성 생성
 # ------------------------------------------------------------
 def generate_audio(script: list = None, indices=None, log=print) -> dict:
-    from modules.tts import TTSEngine
+    from modules.tts import TTSEngine, current_voice
     script = script if script is not None else script_store.load_script_file()
     targets = _targets(script, indices)
     res = {"ok": True, "done": [], "failed": []}
@@ -257,7 +257,7 @@ def generate_audio(script: list = None, indices=None, log=print) -> dict:
         return res
 
     tts = TTSEngine()
-    log(f"   🗣 목소리: {tts.current_voice()}")
+    log(f"   🗣 목소리: {current_voice()}")
     for i in targets:
         scene = script[i - 1]
         content = ((scene.get("content") or "").strip()

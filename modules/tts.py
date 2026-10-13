@@ -100,6 +100,10 @@ class TTSEngine:
         self.output_dir.mkdir(parents=True, exist_ok=True)
         self.api_key = GROQ_API_KEY
 
+    def current_voice(self) -> str:
+        """인스턴스에서도 현재 목소리 확인 (모듈 함수 current_voice 위임)"""
+        return current_voice()
+
     # ---------- 3) 음성 생성 엔트리: Edge TTS → (옵션) gTTS 폴백 ----------
     def generate_speech_groq(self, text: str, output_file: str, voice: str = None) -> str:
         """
