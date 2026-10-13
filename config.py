@@ -85,6 +85,8 @@ BUBBLE_FONT_SIZE = 52       # ë§í’ì„  ê¸°ë³¸ ê¸€ìž í
 TTS_LANGUAGE = "ko"         # í•œêµ­ì–´
 TTS_SPEED = 1.0             # ìŒì„± ì†ë„
 TTS_VOICE = "female"        # ìŒì„± íƒ€ìž… (female/male)
+# Edge TTS fallback to gTTS (robot voice) when generation fails - default off: prevents mixed voices in one video
+TTS_GTTS_FALLBACK = False
 
 # ìž¥ë©´(ë¬¸ìž¥) ì‚¬ì´ ë¬´ìŒ ê°„ê·¹ â€” ìŒì„± ë³‘í•© ì‹œ ìž¥ë©´ ì‚¬ì´ì— ë„£ëŠ” ë¬´ìŒ ê¸¸ì´ (ms)
 # ì‹¤ì œ ë¬¸ìž¥ ì‚¬ì´ ì •ì  = TTS_TAIL_SILENCE_MS + SCENE_GAP_MS

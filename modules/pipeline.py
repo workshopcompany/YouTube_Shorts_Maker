@@ -257,6 +257,7 @@ def generate_audio(script: list = None, indices=None, log=print) -> dict:
         return res
 
     tts = TTSEngine()
+    log(f"   🗣 목소리: {tts.current_voice()}")
     for i in targets:
         scene = script[i - 1]
         content = ((scene.get("content") or "").strip()

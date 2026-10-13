@@ -109,6 +109,11 @@ def main():
     r.add("  " + run([sys.executable, "-c",
                       "import torch;print('torch',torch.__version__,'cuda',torch.cuda.is_available(),"
                       "'cuda_ver',torch.version.cuda)"]))
+    r.add("[3-1] edge-tts (음성 합성)")
+    r.add("  " + run([sys.executable, "-c",
+                      "import edge_tts;v=getattr(edge_tts,'__version__','0');"
+                      "p=tuple(int(x) for x in v.split('.')[:3] if x.isdigit());"
+                      "print('edge-tts',v,'OK' if p>=(7,3,1) else 'TOO OLD (need 7.3.1+) - pip install -U edge-tts')"]))
 
     r.add("[4] NVIDIA driver")
     r.add("  " + run(["nvidia-smi", "--query-gpu=name,memory.total,driver_version",

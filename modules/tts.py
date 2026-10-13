@@ -3,11 +3,78 @@ YouTube 자동화 - TTS 음성 생성 모듈
 Groq API를 사용하여 텍스트를 음성으로 변환
 """
 
+import json
 import os
 import subprocess
+import time
 from pathlib import Path
 from config import (GROQ_API_KEY, OUTPUT_DIR, TTS_LANGUAGE, TTS_SPEED, TTS_VOICE,
-                    FFMPEG_OVERRIDE_DIR, SCENE_GAP_MS, TRIM_TTS_SILENCE, TTS_TAIL_SILENCE_MS)
+                    FFMPEG_OVERRIDE_DIR, SCENE_GAP_MS, TRIM_TTS_SILENCE, TTS_TAIL_SILENCE_MS,
+                    TTS_GTTS_FALLBACK as GTTS_FALLBACK)
+
+# ============================================================
+# 목소리 설정 (웹 편집기에서 선택 · settings.json 에 저장)
+# ============================================================
+SETTINGS_PATH = Path(__file__).resolve().parents[1] / "settings.json"
+
+# 사용 가능한 목소리 (Edge TTS · 무료 · MS 신경망) — 기본값 = 여성(SunHi)
+VOICE_CATALOG = [
+    {"id": "ko-KR-SunHiNeural",              "label": "여성 · SunHi (기본)",  "gender": "female", "locale": "ko-KR"},
+    {"id": "ko-KR-InJoonNeural",             "label": "남성 · InJoon",        "gender": "male",   "locale": "ko-KR"},
+    {"id": "ko-KR-HyunsuMultilingualNeural", "label": "남성 · Hyunsu (생동감)", "gender": "male",   "locale": "ko-KR"},
+    {"id": "en-US-JennyNeural",              "label": "여성 · Jenny (영어)",  "gender": "female", "locale": "en-US"},
+    {"id": "en-US-GuyNeural",                "label": "남성 · Guy (영어)",    "gender": "male",   "locale": "en-US"},
+]
+DEFAULT_VOICE_ID = "ko-KR-SunHiNeural"     # 사용자 요구: 여성이 기본
+
+
+def load_settings() -> dict:
+    """settings.json(목소리 등 사용자 설정) 읽기 — 없거나 깨졌으면 빈 dict"""
+    try:
+        if SETTINGS_PATH.exists():
+            data = json.loads(SETTINGS_PATH.read_text(encoding="utf-8"))
+            if isinstance(data, dict):
+                return data
+    except Exception:
+        pass
+    return {}
+
+
+def save_settings(update: dict) -> dict:
+    """settings.json 에 사용자 설정 저장 (목소리 변경 시 호출)"""
+    data = load_settings()
+    data.update(update or {})
+    try:
+        SETTINGS_PATH.write_text(json.dumps(data, ensure_ascii=False, indent=2) + "\n",
+                                 encoding="utf-8")
+    except Exception as e:
+        print(f"⚠️ settings.json 저장 실패: {e}")
+    return data
+
+
+def voice_catalog() -> list:
+    """웹 편집기 드롭다운용 목소리 목록"""
+    return [dict(v) for v in VOICE_CATALOG]
+
+
+def current_voice() -> str:
+    """실제 사용할 목소리 ID.
+    1) 웹에서 선택한 값(settings.json) → 2) config.TTS_VOICE → 3) 기본 여성"""
+    chosen = str(load_settings().get("tts_voice") or "").strip()
+    if chosen and any(v["id"] == chosen for v in VOICE_CATALOG):
+        return chosen
+    lang = "ko" if TTS_LANGUAGE.lower().startswith("ko") else "en"
+    gender = "male" if str(TTS_VOICE).lower() == "male" else "female"
+    return TTSEngine._EDGE_VOICES[lang][gender]
+
+
+def gtts_fallback_enabled() -> bool:
+    """Edge TTS 실패 시 gTTS(기계음) 폴백 허용 — 기본 끔(목소리 섞임 방지)"""
+    val = load_settings().get("gtts_fallback")
+    if val is not None:
+        return bool(val)
+    return bool(GTTS_FALLBACK)
+
 
 # FFmpeg 경로 설정 (Windows)
 import platform
@@ -33,42 +100,56 @@ class TTSEngine:
         self.output_dir.mkdir(parents=True, exist_ok=True)
         self.api_key = GROQ_API_KEY
 
-    # ---------- 3) 음성 생성 엔트리: Edge TTS → gTTS 폴백 ----------
-    def generate_speech_groq(self, text: str, output_file: str) -> str:
+    # ---------- 3) 음성 생성 엔트리: Edge TTS → (옵션) gTTS 폴백 ----------
+    def generate_speech_groq(self, text: str, output_file: str, voice: str = None) -> str:
         """
-        장면 대사 → 음성. 우선 Edge TTS(무료, 고품질), 실패 시 gTTS 폴백.
+        장면 대사 → 음성.
+        1순위 Edge TTS(무료·자연스러움) — 실패 시 최대 3회 재시도
+        → 그래도 실패하면 settings(TTS_GTTS_FALLBACK)에 따라 gTTS 폴백 또는 오류.
+          기본은 폴백 OFF — 기계음이 한 장면에 섞여 목소리가 일관되지 않는 문제 방지.
         (메서드명은 기존 호환 유지 — 과거 Groq/gTTS 진입점)
         """
-        # 1순위: Edge TTS (ko-KR 신경망, VRAM 0, 무료)
-        try:
-            result = self.generate_speech_edge(text, output_file)
-            if result:
-                return result
-        except Exception as e:
-            print(f"⚠️ Edge TTS 실패({e}) → gTTS 폴백")
+        last_err = None
+        for attempt in range(1, 4):
+            try:
+                result = self.generate_speech_edge(text, output_file, voice=voice)
+                if result:
+                    if attempt > 1:
+                        print(f"   ✅ Edge TTS 재시도 {attempt - 1}회 만에 성공")
+                    return result
+            except Exception as e:
+                last_err = e
+                print(f"⚠️ Edge TTS 실패({e})" + (" — 재시도 중..." if attempt < 3 else ""))
+                if attempt < 3:
+                    time.sleep(1.5)
 
-        # 2순위: gTTS 폴백 (기존 방식)
-        try:
-            from gtts import gTTS
+        if gtts_fallback_enabled():
+            print("   ↪ gTTS(기계음) 폴백 — 목소리가 섞이니 나중에 '변경분 음성 전부'로 통일하세요.")
+            try:
+                from gtts import gTTS
 
-            tts = gTTS(text=text, lang=TTS_LANGUAGE, slow=False)
-            tts.save(output_file)
+                tts = gTTS(text=text, lang=TTS_LANGUAGE, slow=False)
+                tts.save(output_file)
 
-            return output_file
+                return output_file
 
-        except ImportError:
-            print("⚠️ gTTS가 설치되지 않았습니다. 설치 중...")
-            os.system("pip install gtts")
+            except ImportError:
+                print("⚠️ gTTS가 설치되지 않았습니다. 설치 중...")
+                os.system("pip install gtts")
 
-            from gtts import gTTS
-            tts = gTTS(text=text, lang=TTS_LANGUAGE, slow=False)
-            tts.save(output_file)
+                from gtts import gTTS
+                tts = gTTS(text=text, lang=TTS_LANGUAGE, slow=False)
+                tts.save(output_file)
 
-            return output_file
+                return output_file
 
-        except Exception as e:
-            print(f"❌ TTS 생성 실패: {e}")
-            return None
+            except Exception as e:
+                print(f"❌ TTS 생성 실패: {e}")
+                return None
+
+        raise RuntimeError(
+            f"음성 생성 실패: {last_err} — 네트워크(edge-tts) 확인 후 '변경분 음성 전부'로 다시 시도하세요"
+        )
 
     def generate_speech_edge(self, text: str, output_file: str, voice: str = None) -> str:
         """
@@ -80,9 +161,8 @@ class TTSEngine:
         import edge_tts
 
         if voice is None:
-            lang = "ko" if TTS_LANGUAGE.lower().startswith("ko") else "en"
-            gender = "male" if str(TTS_VOICE).lower() == "male" else "female"
-            voice = self._EDGE_VOICES[lang][gender]
+            # 1) 웹에서 고른 목소리(settings.json) → 2) config.TTS_VOICE → 3) 기본 여성(SunHi)
+            voice = current_voice()
 
         # TTS_SPEED(1.0=보통) → rate 퍼센트 (+10%/-10%)
         rate = f"{int(round((float(TTS_SPEED) - 1.0) * 100)):+d}%"

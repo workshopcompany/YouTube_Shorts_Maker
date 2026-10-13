@@ -8,8 +8,6 @@
 """
 import os, sys, time, gc
 from pathlib import Path
-from pathlib import Path
-from pathlib import Path
 
 os.environ["HF_HOME"] = str(Path(__file__).resolve().parents[1] / "model" / ".cache")  # 반드시 diffusers import 전
 sys.stdout.reconfigure(encoding="utf-8", errors="replace")

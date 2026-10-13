@@ -33,7 +33,7 @@ if str(ROOT) not in sys.path:
     sys.path.insert(0, str(ROOT))
 
 from config import OUTPUT_DIR, VIDEO_PLAYBACK_SPEED, VIDEO_WIDTH, VIDEO_HEIGHT  # noqa: E402
-from modules import script_store, overlay as overlay_mod, pipeline  # noqa: E402
+from modules import script_store, overlay as overlay_mod, pipeline, tts as tts_mod  # noqa: E402
 
 HOST = os.environ.get("WEBAPP_HOST", "127.0.0.1")
 PORT = int(os.environ.get("WEBAPP_PORT", "8765"))
@@ -99,6 +99,46 @@ def _torch_available() -> bool:
         return False
 
 
+# ============================================================
+# 목소리(음성) 설정 — 웹 편집기 ②탭에서 선택 (기본: 여성)
+# ============================================================
+def voice_info() -> dict:
+    """현재 목소리 + 선택 가능한 목소리 목록"""
+    return {"current": tts_mod.current_voice(),
+            "default": tts_mod.DEFAULT_VOICE_ID,
+            "options": tts_mod.voice_catalog(),
+            "gtts_fallback": tts_mod.gtts_fallback_enabled()}
+
+
+def set_voice(voice_id: str) -> dict:
+    """목소리 변경 → settings.json 에 저장 (음성은 별도로 다시 만들어야 반영)"""
+    ids = {v["id"] for v in tts_mod.voice_catalog()}
+    if voice_id not in ids:
+        return {"ok": False, "error": f"알 수 없는 목소리: {voice_id}"}
+    tts_mod.save_settings({"tts_voice": voice_id})
+    info = voice_info()
+    label = next((v["label"] for v in info["options"] if v["id"] == voice_id), voice_id)
+    return {"ok": True, "voice": info,
+            "message": f"목소리 변경됨: {label} — '🔄 변경분 음성 전부' 또는 제작 시 새 목소리가 적용됩니다."}
+
+
+def preview_voice(voice_id: str) -> dict:
+    """선택한 목소리로 짧은 문장을 생성 → 미리듣기 URL 반환"""
+    ids = {v["id"] for v in tts_mod.voice_catalog()}
+    if voice_id not in ids:
+        return {"ok": False, "error": f"알 수 없는 목소리: {voice_id}"}
+    audio_dir = Path(OUTPUT_DIR) / "audio"
+    audio_dir.mkdir(parents=True, exist_ok=True)
+    out = audio_dir / f"preview_{voice_id.replace('/', '_')}.mp3"
+    text = ("안녕하세요. 이 목소리로 유튜브 쇼츠를 만들어요." if voice_id.startswith("ko")
+            else "Hi. Let's make a YouTube Short with this voice.")
+    try:
+        tts_mod.TTSEngine().generate_speech_edge(text, str(out), voice=voice_id)
+    except Exception as e:
+        return {"ok": False, "error": f"미리듣기 생성 실패: {e}"}
+    return {"ok": True, "url": media_url(out), "voice": voice_id}
+
+
 def build_state(force_preview: bool = False) -> dict:
     script = script_store.load_script_file()
     cfg = overlay_mod.load_config()
@@ -146,6 +186,7 @@ def build_state(force_preview: bool = False) -> dict:
         "state_file": {"exists": script_store.state_path().exists(),
                        "updated": state.get("updated")},
         "image_modes": pipeline.IMAGE_MODES,
+        "voice": voice_info(),
         "torch_available": _torch_available(),
         "default_speed": float(VIDEO_PLAYBACK_SPEED or 1.0),
         "paths": {
@@ -575,6 +616,9 @@ class Handler(BaseHTTPRequestHandler):
                 plan = script_store.plan_tasks(script, overlay_key=overlay_mod.current_key)
                 plan.pop("rows", None)
                 self._json({"ok": True, "plan": plan})
+            elif u.path == "/api/voice":
+                # 현재 목소리 + 선택 가능한 목소리 목록 (웹 ②탭 드롭다운용)
+                self._json({"ok": True, "voice": voice_info()})
             elif u.path == "/media":
                 self._serve_media(q.get("path", [""])[0],
                                   use_out=(q.get("out", ["0"])[0] == "1"))
@@ -602,6 +646,10 @@ class Handler(BaseHTTPRequestHandler):
                 res = apply_overlay_now(data.get("scenes"), data.get("config"))
             elif u.path == "/api/tts":
                 res = regen_audio(data.get("scenes"), auto=bool(data.get("auto")))
+            elif u.path == "/api/voice":
+                res = set_voice(data.get("voice") or "")
+            elif u.path == "/api/voice/preview":
+                res = preview_voice(data.get("voice") or "")
             elif u.path == "/api/insert_image":
                 if data.get("remove"):
                     res = remove_insert_image(int(data.get("scene", 1)))
